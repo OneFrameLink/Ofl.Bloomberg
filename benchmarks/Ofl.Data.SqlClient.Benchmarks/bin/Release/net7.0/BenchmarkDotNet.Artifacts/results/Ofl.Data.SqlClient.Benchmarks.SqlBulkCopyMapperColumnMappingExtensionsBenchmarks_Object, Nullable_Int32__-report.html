@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>Ofl.Data.SqlClient.Benchmarks.SqlBulkCopyMapperColumnMappingExtensionsBenchmarks_Object, Nullable_Int32__-20230507-102726</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet=v0.13.5, OS=Windows 11 (10.0.22000.1817/21H2/SunValley)
+Intel Core i7-8565U CPU 1.80GHz (Whiskey Lake), 1 CPU, 8 logical and 4 physical cores
+.NET SDK=7.0.202
+  [Host]     : .NET 7.0.4 (7.0.423.11508), X64 RyuJIT AVX2
+  DefaultJob : .NET 7.0.4 (7.0.423.11508), X64 RyuJIT AVX2
+</code></pre>
+<pre><code></code></pre>
+
+<table>
+<thead><tr><th>          Method</th><th>SequentialAccess</th><th>FromDelegate</th><th>Columns</th><th>Rows</th><th>Offset</th><th>Step</th><th>Mean</th><th>Error</th><th>StdDev</th><th>Ratio</th><th>Allocated</th><th>Alloc Ratio</th>
+</tr>
+</thead><tbody><tr><td>Initial_Implementation</td><td>False</td><td>False</td><td>1000</td><td>1000</td><td>0</td><td>1</td><td>63.45 ms</td><td>1.174 ms</td><td>1.862 ms</td><td>1.00</td><td>86 B</td><td>1.00</td>
+</tr><tr><td>Initial_Implementation</td><td>False</td><td>True</td><td>1000</td><td>1000</td><td>0</td><td>1</td><td>350.96 ms</td><td>6.955 ms</td><td>10.195 ms</td><td>1.00</td><td>600 B</td><td>1.00</td>
+</tr><tr><td>Initial_Implementation</td><td>True</td><td>False</td><td>1000</td><td>1000</td><td>0</td><td>1</td><td>61.28 ms</td><td>1.179 ms</td><td>1.103 ms</td><td>1.00</td><td>67 B</td><td>1.00</td>
+</tr><tr><td>Initial_Implementation</td><td>True</td><td>True</td><td>1000</td><td>1000</td><td>0</td><td>1</td><td>338.98 ms</td><td>6.369 ms</td><td>8.503 ms</td><td>1.00</td><td>600 B</td><td>1.00</td>
+</tr></tbody></table>
+</body>
+</html>

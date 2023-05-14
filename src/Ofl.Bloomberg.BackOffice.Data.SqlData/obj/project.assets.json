@@ -1,0 +1,153 @@
+{
+  "version": 3,
+  "targets": {
+    "net7.0": {
+      "System.IO.Pipelines/7.0.0": {
+        "type": "package",
+        "compile": {
+          "lib/net7.0/System.IO.Pipelines.dll": {
+            "related": ".xml"
+          }
+        },
+        "runtime": {
+          "lib/net7.0/System.IO.Pipelines.dll": {
+            "related": ".xml"
+          }
+        },
+        "build": {
+          "buildTransitive/net6.0/_._": {}
+        }
+      },
+      "Ofl.Bloomberg.BackOffice/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v7.0",
+        "dependencies": {
+          "Ofl.Bloomberg.Parsing": "1.0.0",
+          "System.IO.Pipelines": "7.0.0"
+        },
+        "compile": {
+          "bin/placeholder/Ofl.Bloomberg.BackOffice.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/Ofl.Bloomberg.BackOffice.dll": {}
+        }
+      },
+      "Ofl.Bloomberg.Parsing/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v7.0",
+        "compile": {
+          "bin/placeholder/Ofl.Bloomberg.Parsing.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/Ofl.Bloomberg.Parsing.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "System.IO.Pipelines/7.0.0": {
+      "sha512": "jRn6JYnNPW6xgQazROBLSfpdoczRw694vO5kKvMcNnpXuolEixUyw6IBuBs2Y2mlSX/LdLvyyWmfXhaI3ND1Yg==",
+      "type": "package",
+      "path": "system.io.pipelines/7.0.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "Icon.png",
+        "LICENSE.TXT",
+        "THIRD-PARTY-NOTICES.TXT",
+        "buildTransitive/net461/System.IO.Pipelines.targets",
+        "buildTransitive/net462/_._",
+        "buildTransitive/net6.0/_._",
+        "buildTransitive/netcoreapp2.0/System.IO.Pipelines.targets",
+        "lib/net462/System.IO.Pipelines.dll",
+        "lib/net462/System.IO.Pipelines.xml",
+        "lib/net6.0/System.IO.Pipelines.dll",
+        "lib/net6.0/System.IO.Pipelines.xml",
+        "lib/net7.0/System.IO.Pipelines.dll",
+        "lib/net7.0/System.IO.Pipelines.xml",
+        "lib/netstandard2.0/System.IO.Pipelines.dll",
+        "lib/netstandard2.0/System.IO.Pipelines.xml",
+        "system.io.pipelines.7.0.0.nupkg.sha512",
+        "system.io.pipelines.nuspec",
+        "useSharedDesignerContext.txt"
+      ]
+    },
+    "Ofl.Bloomberg.BackOffice/1.0.0": {
+      "type": "project",
+      "path": "../Ofl.Bloomberg.BackOffice/Ofl.Bloomberg.BackOffice.csproj",
+      "msbuildProject": "../Ofl.Bloomberg.BackOffice/Ofl.Bloomberg.BackOffice.csproj"
+    },
+    "Ofl.Bloomberg.Parsing/1.0.0": {
+      "type": "project",
+      "path": "../Ofl.Bloomberg.Parsing/Ofl.Bloomberg.Parsing.csproj",
+      "msbuildProject": "../Ofl.Bloomberg.Parsing/Ofl.Bloomberg.Parsing.csproj"
+    }
+  },
+  "projectFileDependencyGroups": {
+    "net7.0": [
+      "Ofl.Bloomberg.BackOffice >= 1.0.0"
+    ]
+  },
+  "packageFolders": {
+    "C:\\Users\\nick\\.nuget\\packages\\": {}
+  },
+  "project": {
+    "version": "1.0.0",
+    "restore": {
+      "projectUniqueName": "C:\\d2\\Ofl.Bloomberg\\src\\Ofl.Bloomberg.BackOffice.Data.SqlData\\Ofl.Bloomberg.BackOffice.Data.SqlData.csproj",
+      "projectName": "Ofl.Bloomberg.BackOffice.Data.SqlData",
+      "projectPath": "C:\\d2\\Ofl.Bloomberg\\src\\Ofl.Bloomberg.BackOffice.Data.SqlData\\Ofl.Bloomberg.BackOffice.Data.SqlData.csproj",
+      "packagesPath": "C:\\Users\\nick\\.nuget\\packages\\",
+      "outputPath": "C:\\d2\\Ofl.Bloomberg\\src\\Ofl.Bloomberg.BackOffice.Data.SqlData\\obj\\",
+      "projectStyle": "PackageReference",
+      "configFilePaths": [
+        "C:\\Users\\nick\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+      ],
+      "originalTargetFrameworks": [
+        "net7.0"
+      ],
+      "sources": {
+        "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+        "https://api.nuget.org/v3/index.json": {}
+      },
+      "frameworks": {
+        "net7.0": {
+          "targetAlias": "net7.0",
+          "projectReferences": {
+            "C:\\d2\\Ofl.Bloomberg\\src\\Ofl.Bloomberg.BackOffice\\Ofl.Bloomberg.BackOffice.csproj": {
+              "projectPath": "C:\\d2\\Ofl.Bloomberg\\src\\Ofl.Bloomberg.BackOffice\\Ofl.Bloomberg.BackOffice.csproj"
+            }
+          }
+        }
+      },
+      "warningProperties": {
+        "warnAsError": [
+          "NU1605"
+        ]
+      }
+    },
+    "frameworks": {
+      "net7.0": {
+        "targetAlias": "net7.0",
+        "imports": [
+          "net461",
+          "net462",
+          "net47",
+          "net471",
+          "net472",
+          "net48",
+          "net481"
+        ],
+        "assetTargetFallback": true,
+        "warn": true,
+        "frameworkReferences": {
+          "Microsoft.NETCore.App": {
+            "privateAssets": "all"
+          }
+        },
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\7.0.202\\RuntimeIdentifierGraph.json"
+      }
+    }
+  }
+}
