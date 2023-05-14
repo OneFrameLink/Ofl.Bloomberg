@@ -33,6 +33,9 @@ public readonly struct SqlBulkCopyMapperColumnMapping
         // methods, the delegate doesn't have this problem).
         new(column, accessor);
 
+    // TODO: Check to see if we can improve delegate performance
+    // when the method and target is accessible by the generated
+    // type (so we don't need the overhead of the delegate at all)
     public static SqlBulkCopyMapperColumnMapping FromDelegate<T, TParameter>(
         DbColumn column
         , SqlBulkCopyRowValueAccessor<T, TParameter> accessor

@@ -8,7 +8,7 @@ namespace Ofl.Data.SqlClient;
 // bytes can be streamed directly to the DB for strings
 // instead of allocating strings entirely (if there is access
 // to bytes, that is).
-public class AsynEnumerableDataReader<T> : DbDataReader
+public class AsyncEnumerableDataReader<T> : DbDataReader
     where T : class
 {
     #region Instance, read-only state
@@ -21,7 +21,7 @@ public class AsynEnumerableDataReader<T> : DbDataReader
 
     #region Constructor
 
-    public AsynEnumerableDataReader(
+    public AsyncEnumerableDataReader(
         IAsyncEnumerable<T> enumerable
         , ISqlBulkCopyRowMapper<T> mapper
     )
