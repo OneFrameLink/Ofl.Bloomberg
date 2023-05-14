@@ -214,9 +214,10 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
         return new(
             columnMapping
             , mapMethod.ReturnType
-            , null!
+            , default!
             , mapMethod
-            , null!
+            , default!
+            , default
         );
     }
 
@@ -520,14 +521,20 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
             // If x / n > 50% then (x + 1) / (n + 1) > 50%
             if (density > .5)
             {
+                // Is a new bucket created?
+                // No if the count is zero.
+                var createNewBucket = currentBucket.Count > 0;
+
                 // Take this and the remaining items and add to the buckets.
                 // If the current bucket count is zero, then no need
                 // to create a new bucket.
-                var bucket = currentBucket.Count == 0 ? currentBucket : new List<int>();
+                var bucket = createNewBucket ? new List<int>() : currentBucket;
                 bucket.AddRange(indices.Skip(consumed));
 
-                // Add the bucket to buckets.
-                buckets.Add(bucket);
+                // Add the bucket to buckets if it is a new
+                // bucket.
+                if (createNewBucket)
+                    buckets.Add(bucket);
 
                 // Break.
                 break;
@@ -561,9 +568,33 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
             buckets.Add(currentBucket);
         }
 
+        // The implementation.
+        IEnumerable<int[]> Implementation()
+        {
+            // Cycle through the buckets.
+            foreach (var bucket in buckets!)
+            {
+                // Anything that has less than two elements is
+                // broken down into separate buckets
+                // The compiler believes that a branch between
+                // two separate statements is better than
+                // a jump table.
+                // If the bucket length is not 2
+                // then yield the bucket as-is.
+                if (bucket.Count != 2)
+                    yield return bucket.ToArray();
+                else
+                {
+                    // Yield the first and second elements
+                    // separately.
+                    yield return new int[1] { bucket[0] };
+                    yield return new int[1] { bucket[1] };
+                }
+            }
+        }
+
         // Return the buckets.
-        return buckets
-            .Select(b => b.ToArray())
+        return Implementation()
             .ToArray()
             .AsSpan();
     }
@@ -572,12 +603,9 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
 
     private static void WriteBucket(
         this ILGenerator il
-        , IReadOnlyDictionary<int, (ValidatedColumnMapping mapping, Label label)> columnMapings
+        , IReadOnlyDictionary<int, ValidatedColumnMapping> columnMapings
         , ReadOnlySpan<int> bucket
-        , IReadOnlyDictionary<Type, (LocalVariable variable, int index)> nullableVariables
-        , IReadOnlyDictionary<Type, (LocalVariable variable, int index)> nonNullableVariables
         , Label defaultLabel
-        , Label endOfMethodLabel
     )
     {
         // If there is one item, then jump if it's equal.
@@ -588,7 +616,7 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
             il.PushInt32(bucket[0]);
 
             // If equal, jump to the code for the column mapping.
-            il.Emit(OpCodes.Beq, columnMapings[bucket[0]].label);
+            il.Emit(OpCodes.Beq, columnMapings[bucket[0]].Label);
 
             // Bail.
             return;
@@ -625,7 +653,7 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
             // push that label, otherwise, push the
             // default label.
             labels[i - first] = columnMapings.TryGetValue(i, out var pair)
-                ? pair.label
+                ? pair.Label
                 : defaultLabel;
         }
 
@@ -633,23 +661,20 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
         il.Emit(OpCodes.Switch, labels);
     }
 
-
     private static void WriteBuckets(
         this ILGenerator il
-        , IReadOnlyDictionary<int, (ValidatedColumnMapping mapping, Label label)> columnMapings
-        , Label? mark
+        , IReadOnlyDictionary<int, ValidatedColumnMapping> columnMapings
         , ReadOnlySpan<int[]> buckets
-        , IReadOnlyDictionary<Type, (LocalVariable variable, int index)> nullableVariables
-        , IReadOnlyDictionary<Type, (LocalVariable variable, int index)> nonNullableVariables
         , Label defaultLabel
-        , Label endOfMethodLabel
+        , bool jumpToDefaultIfNoMoreBranches
+        , Label? mark
     )
     {
         // The max bucket count before
         // splitting between the two.
         // Assume this is the top level
         // At the top level, process
-        // up to three buckets.
+        // up to three buckets in order.
         var maxBucketCount = 3;
 
         // If this is marked, then do so here
@@ -672,30 +697,25 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
                 il.WriteBucket(
                     columnMapings
                     , bucket
-                    , nullableVariables
-                    , nonNullableVariables
                     , defaultLabel
-                    , endOfMethodLabel
                 );
 
-            // Branch to the default.
-            il.Emit(OpCodes.Br, defaultLabel);
+            // If jumping to default if no more
+            // branches, then do that here.
+            if (jumpToDefaultIfNoMoreBranches)
+                il.Emit(OpCodes.Br, defaultLabel);
 
             // Get out.
             return;
         }
 
         // The midpoint.
-        // The compiler seems to favor the a smaller bucket being
-        // processed first, so we'll do that as well by
-        // subtracting one (also because we're dealing
-        // with zero based indices).
-        var mid = (buckets.Length / 2) - 1;
+        var mid = (buckets.Length / 2);
 
         // Split the buckets into left and right.
         var left = buckets[..mid];
         var leftLabel = il.DefineLabel();
-        var right = buckets[(mid + 1)..];
+        var right = buckets[mid..];
         var rightLabel = il.DefineLabel();
 
         // Load the last value of the last bucket on the left.
@@ -711,45 +731,23 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
         il.Emit(OpCodes.Bgt, rightLabel);
 
         // Emit the left and then the right.
+        // Note we want the right most branches
+        // to terminate in defaults if
+        // there's nothing left.
         il.WriteBuckets(
             columnMapings
-            , leftLabel
             , left
-            , nullableVariables
-            , nonNullableVariables
             , defaultLabel
-            , endOfMethodLabel
+            , false
+            , leftLabel
         );
         il.WriteBuckets(
             columnMapings
-            , rightLabel
             , right
-            , nullableVariables
-            , nonNullableVariables
             , defaultLabel
-            , endOfMethodLabel
+            , true
+            , rightLabel
         );
-    }
-
-    private static void WriteBuckets(
-        this ILGenerator il
-        , IReadOnlyList<ValidatedColumnMapping> columnMapings
-        , ReadOnlySpan<int[]> buckets
-        , IReadOnlyDictionary<Type, (LocalVariable variable, int index)> nullableVariables
-        , IReadOnlyDictionary<Type, (LocalVariable variable, int index)> nonNullableVariables
-        , Label defaultLabel
-        , Label endOfMethodLabel
-    )
-    {
-        // Map the column mappings to the ordinals.
-        var columnMappingByOrdinal = columnMapings
-            .ToDictionary(m => m.Mapping.Column.ColumnOrdinal!.Value)
-            .AsReadOnly();
-
-        // Switch on various scenarios.
-        // Binary tree, when there are two buckets left, it processes them one
-        // after the other
-        // Integer division, so breakpoint is end of last bucket across all buckets / 2
     }
 
     // Implements:
@@ -845,10 +843,8 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
         .ToDictionary(p => p.type, p => (p.local, p.index))
         .AsReadOnly();
 
-        // Create the default case and end of method labels.
-        var defaultCase = il.DefineLabel();
-        var loadNull = il.DefineLabel();
-        var endOfMethod = il.DefineLabel();
+        // Create the default label.
+        var defaultLabel = il.DefineLabel();
 
         // Get the index buckets.
         var indexBuckets = GenerateSwitchBuckets(
@@ -858,211 +854,154 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
                 .AsReadOnly()
         );
 
-        // Switch based on the buckets.
-        // If there is one bucket
+        // Set labels for all of the column mappings and map
+        // it into a dictionary.
+        var columnMappingsByColumnOrdinal = columnMappings
+            .Select(m => m with { Label = il.DefineLabel() })
+            .ToDictionary(m => m.Mapping.Column.ColumnOrdinal!.Value)
+            .AsReadOnly();
 
-        // Look at the last column mapping, that is the number of
-        // items we need in the array (plus one, since it's zero-based)
-        // for labels.  Anything that does *not* map to an ordinal will
-        // branch to the default case.
-        // This allows for a branching using the ordinal passed in, directly
-        // to the jump case.
-        // NOTE: If there are significant gaps, then this may be sub optimal
-        // As of April 30, 2023, there are scenarios where if the gap is large
-        // between numbers, conditional branching will be used (and then possibly
-        // a jump table).
-        // There is an open question here about how to calculate that:
-        // https://github.com/dotnet/roslyn/discussions/67937#discussioncomment-5753054
-        // And Roslyn's code to lower a switch statement is here and should be
-        // explored:
-        // https://github.com/dotnet/roslyn/blob/main/src/Compilers/CSharp/Portable/Lowering/LocalRewriter/LocalRewriter_PatternSwitchStatement.cs
-        // Of course, this would be easier with the LambdaExpressio.CompileToMethod
-        // method:
-        // https://learn.microsoft.com/en-us/dotnet/api/system.linq.expressions.lambdaexpression.compiletomethod?view=netframework-4.8.1
-        // But that only exists in .NET Framework, so no go
-        // Get the start for the column mappings.
-        var first = columnMappings[0]
-            .Mapping
-            .Column
-            .ColumnOrdinal!
-            .Value;
-        var last = columnMappings[columnMappings.Count - 1]
-            .Mapping
-            .Column
-            .ColumnOrdinal!
-            .Value;
+        // Write the IL for switching among the buckets.
+        // Terminate the branch if there is only one.
+        il.WriteBuckets(
+            columnMappingsByColumnOrdinal
+            , indexBuckets
+            , defaultLabel
+            , true
+            , default
+        );
 
-        // The start is the first, obvs.
-        // The count is last minus first plus one.
-        var count = last - first + 1;
+        // Cycle through the column mappings, ordered by
+        // ordinal.
+        // We need to resort because these are all structs
+        // and the ones with the labels are in the dictionary.
+        var orderedMappings = columnMappingsByColumnOrdinal
+            .OrderBy(p => p.Key)
+            .Select(p => p.Value);
 
-        // Generate the labels.
-        var labels = Enumerable
-            // The last mapping has the highest ordinal and we want labels to that.
-            .Range(0, count)
-            .Select(_ => il.DefineLabel())
-            .ToArray();
+        // Define the label to load null
+        // and the end of method.
+        var loadNullLabel = il.DefineLabel();
+        var endOfMethodLabel = il.DefineLabel();
 
-        // What's the offset?
-        var offset = columnMappings[0].Mapping.Column.ColumnOrdinal!.Value;
-
-        // Load the second parameter, this is the index.
-        il.PushIndexParameter();
-
-        // If there is an offset, then subtract it.
-        if (offset > 0)
-        {
-            // Load the offset.
-            il.PushInt32(offset);
-
-            // Subtract.
-            il.Emit(OpCodes.Sub);
-        }
-
-        // Jump.
-        il.Emit(OpCodes.Switch, labels);
-
-        // Branch on the default case if it falls through.
-        il.Emit(OpCodes.Br, defaultCase);
-
-        // The current column mapping and index.
-        int currentColumnMappingIndex = 0;
-        var currentColumnMapping = columnMappings[currentColumnMappingIndex];
-
-        // Cycle through the labels using first and
-        // last.
-        for (int ordinal = first, index = 0; ordinal <= last; ordinal++, index++)
+        // Cycle.
+        foreach (var mapping in orderedMappings)
         {
             // Get the label.
-            var label = labels[index];
+            var label = mapping.Label;
 
             // Mark the label.
             il.MarkLabel(label);
 
-            // Is the index equal to the column mapping?
-            if (ordinal == currentColumnMapping.Mapping.Column.ColumnOrdinal)
+            // Get boxing.
+            var nullableBoxing = mapping.Boxing;
+
+            // Push this and the field that has the mapper.
+            // TODO: Explore being able to move this out
+            // and pushed once in the optimal case.
+            il.PushThis();
+            il.Emit(OpCodes.Ldfld, mapping.MapFieldBuilder);
+
+            // Load the first parameter, this is address
+            // of the instance of T (no need to get it's address)
+            il.PushArgument(1);
+
+            // Make the call to map.
+            // The result is on the top of the stack now.
+            il.Emit(OpCodes.Call, mapping.MapFieldBuilderGetMethod);
+
+            // Is there a box field builder?
+            if (nullableBoxing is not null)
             {
                 // Get boxing.
-                var nullableBoxing = currentColumnMapping.Boxing;
+                var boxing = nullableBoxing.Value;
 
-                // Push this and the field that has the mapper.
-                // TODO: Explore being able to move this out
-                // and pushed once in the optimal case.
-                il.PushThis();
-                il.Emit(OpCodes.Ldfld, currentColumnMapping.MapFieldBuilder);
-
-                // Load the first parameter, this is address
-                // of the instance of T (no need to get it's address)
-                il.PushArgument(1);
-
-                // Make the call to map.
-                // The result is on the top of the stack now.
-                il.Emit(OpCodes.Call, currentColumnMapping.MapFieldBuilderGetMethod);
-
-                // Is there a box field builder?
-                if (nullableBoxing is not null)
+                // There will *always* be a value.
+                // If it's nullable, we have to call
+                // HasValue and then branch to load null
+                // if it is false.
+                if (boxing.Nullable)
                 {
-                    // Get boxing.
-                    var boxing = nullableBoxing.Value;
+                    // Get the local.
+                    var local = nullableVariableByType[boxing.Type];
 
-                    // There will *always* be a value.
-                    // If it's nullable, we have to call
-                    // HasValue and then branch to load null
-                    // if it is false.
-                    if (boxing.Nullable)
-                    {
-                        // Get the local.
-                        var local = nullableVariableByType[boxing.Type];
+                    // Store in the local, we will need the *address*
+                    // to make calls.
+                    il.PushStoreLocal(local.index);
 
-                        // Store in the local, we will need the *address*
-                        // to make calls.
-                        il.PushStoreLocal(local.index);
+                    // Get the has value method and
+                    // the value property.
+                    // Get the nullable type first.
+                    var nullableType = typeof(Nullable<>)
+                        .MakeGenericType(boxing.Type);
 
-                        // Get the has value method and
-                        // the value property.
-                        // Get the nullable type first.
-                        var nullableType = typeof(Nullable<>)
-                            .MakeGenericType(boxing.Type);
+                    // Get the method infos to call.
+                    // Well need to see if there is
+                    // a value, and actually get the value.
+                    var hasValueGetterMethodInfo = nullableType
+                        .GetProperty(
+                            nameof(Nullable<int>.HasValue)
+                            , BindingFlags.Instance
+                            | BindingFlags.Public
+                        )
+                        ?.GetGetMethod()
+                        ?? throw new InvalidOperationException(
+                            $"Could not find the get method for the {nameof(Nullable<int>.HasValue)} "
+                            + $"property on the type {nullableType.FullName}"
+                        );
+                    var valueGetterMethodInfo = nullableType
+                        .GetProperty(
+                            nameof(Nullable<int>.Value)
+                            , BindingFlags.Instance
+                            | BindingFlags.Public
+                        )
+                        ?.GetGetMethod()
+                        ?? throw new InvalidOperationException(
+                            $"Could not find the get method for the {nameof(Nullable<int>.Value)} "
+                            + $"property on the type {nullableType.FullName}"
+                        );
 
-                        // Get the method infos to call.
-                        var hasValueGetterMethodInfo = nullableType
-                            .GetProperty(
-                                nameof(Nullable<int>.HasValue)
-                                , BindingFlags.Instance
-                                | BindingFlags.Public
-                            )
-                            ?.GetGetMethod()
-                            ?? throw new InvalidOperationException(
-                                $"Could not find the get method for the {nameof(Nullable<int>.HasValue)} "
-                                + $"property on the type {nullableType.FullName}"
-                            );
-                        var valueGetterMethodInfo = nullableType
-                            .GetProperty(
-                                nameof(Nullable<int>.Value)
-                                , BindingFlags.Instance
-                                | BindingFlags.Public
-                            )
-                            ?.GetGetMethod()
-                            ?? throw new InvalidOperationException(
-                                $"Could not find the get method for the {nameof(Nullable<int>.Value)} "
-                                + $"property on the type {nullableType.FullName}"
-                            );
+                    // Load the *address* of the local.
+                    il.PushLoadLocalAddress(local.index);
 
-                        // Load the *address* of the local.
-                        il.PushLoadLocalAddress(local.index);
+                    // Push the value of HasValue onto
+                    // The stack.
+                    il.Emit(OpCodes.Call, hasValueGetterMethodInfo);
 
-                        // Push the value of HasValue onto
-                        // The stack.
-                        il.Emit(OpCodes.Call, hasValueGetterMethodInfo);
+                    // If the value is false, then jump to load null.
+                    il.Emit(OpCodes.Brfalse, loadNullLabel);
 
-                        // If the value is false, then jump to load null.
-                        il.Emit(OpCodes.Brfalse, loadNull);
+                    // Not false, load the address again, get the value.
+                    il.PushLoadLocalAddress(local.index);
 
-                        // Not false, load the address again, get the value.
-                        il.PushLoadLocalAddress(local.index);
-
-                        // Push the value of Value onto
-                        // The stack.
-                        il.Emit(OpCodes.Call, valueGetterMethodInfo);
-                    }
-
-                    // Get the index of the non nullable local.
-                    var typeLocalIndex = nonNullValueTypeVariableByType[boxing.Type].index;
-
-                    // Store in the non nullable variable by type.
-                    il.PushStoreLocal(typeLocalIndex);
-
-                    // Load this and load the boxable field.
-                    il.PushThis();
-                    il.Emit(OpCodes.Ldfld, boxing.ReusableBoxFieldBuilder);
-
-                    // Load the address back onto the stack.
-                    il.PushLoadLocalAddress(typeLocalIndex);
-
-                    // Make the call to reuse the box.
-                    il.Emit(OpCodes.Call, boxing.ReusableBoxGetBoxMethodInfo);
+                    // Push the value of Value onto
+                    // The stack.
+                    il.Emit(OpCodes.Call, valueGetterMethodInfo);
                 }
 
-                // Get out, the object is on the stack.
-                il.Emit(OpCodes.Br, endOfMethod);
+                // Get the index of the non nullable local.
+                var typeLocalIndex = nonNullValueTypeVariableByType[boxing.Type].index;
 
-                // Set the next column.
-                currentColumnMapping = columnMappings
-                    // Use ElementAtOrDefault since we will
-                    // go past the end of the list at some point.
-                    // This is a struct, but it should be fine and
-                    // be null, which is what we want.
-                    .ElementAtOrDefault(++currentColumnMappingIndex);
+                // Store in the non nullable variable by type.
+                il.PushStoreLocal(typeLocalIndex);
+
+                // Load this and load the boxable field.
+                il.PushThis();
+                il.Emit(OpCodes.Ldfld, boxing.ReusableBoxFieldBuilder);
+
+                // Load the address back onto the stack.
+                il.PushLoadLocalAddress(typeLocalIndex);
+
+                // Make the call to reuse the box.
+                il.Emit(OpCodes.Call, boxing.ReusableBoxGetBoxMethodInfo);
             }
-            else
-                // Branch immediately to the default.
-                // NOTE: For a lot of columns, this may be suboptimal
-                // or even fail.
-                il.Emit(OpCodes.Br, defaultCase);
+
+            // Get out, the object is on the stack.
+            il.Emit(OpCodes.Br, endOfMethodLabel);
         }
 
         // Default case
-        il.MarkLabel(defaultCase);
+        il.MarkLabel(defaultLabel);
 
         // The throw method name.
         const string createExceptionMethodName = 
@@ -1088,11 +1027,11 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
         il.Emit(OpCodes.Throw);
 
         // Loading null for nullable boxes.
-        il.MarkLabel(loadNull);
+        il.MarkLabel(loadNullLabel);
         il.Emit(OpCodes.Ldnull);
 
         // End of method, return.
-        il.MarkLabel(endOfMethod);
+        il.MarkLabel(endOfMethodLabel);
         il.Emit(OpCodes.Ret);
     }
 

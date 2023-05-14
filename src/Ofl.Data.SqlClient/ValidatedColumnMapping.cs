@@ -9,4 +9,5 @@ internal record struct ValidatedColumnMapping(
     , FieldBuilder MapFieldBuilder
     , MethodInfo MapFieldBuilderGetMethod
     , ValidatedColumnBoxedValueMapping? Boxing
+    , Label Label
 );

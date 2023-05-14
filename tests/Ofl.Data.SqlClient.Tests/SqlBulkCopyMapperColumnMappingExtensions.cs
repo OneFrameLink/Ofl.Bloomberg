@@ -94,7 +94,10 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
     ) where T : new()
     {
         // Create the mapper and the expected.
-        var (mapping, ordinal, expected) = CreateMapperAndExpected<T>(mapperIsDelegate, resultType);
+        var (mapping, ordinal, expected) = CreateMapperAndExpected<T>(
+            mapperIsDelegate
+            , resultType
+        );
 
         // Now create the mapper.
         using var mapper = SqlClient.SqlBulkCopyMapperColumnMappingExtensions
@@ -158,9 +161,6 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
     [Fact]
     public void Test_CreateSqlBulkCopyMapper_1000_Columns_With_1000_Offset_And_Two_Buckets_Of_500_Separated_By_2000_Succeeds()
     {
-        // The expected value.
-        var expected = 1;
-
         // The groups
         var firstIndices = CreateSteppedMappings(
             500
@@ -176,7 +176,7 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
             .Concat(secondIndices)
             .Select((n, i) => SqlBulkCopyMapperColumnMapping.FromDelegate(
                 new TestDbColumn($"c{n}", n)
-                , (in object _) => expected
+                , (in object _) => n
             ))
             .ToList()
             .AsReadOnly();
@@ -192,16 +192,13 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
             var actual = mapper.Map(null!, m.Column.ColumnOrdinal!.Value);
 
             // Assert.
-            Assert.Equal(expected, actual);
+            Assert.Equal(m.Column.ColumnOrdinal!.Value, actual);
         }
     }
 
     [Fact]
     public void Test_CreateSqlBulkCopyMapper_1000_Columns_With_1000_Offset_And_Step_Of_1000_Succeeds()
     {
-        // The expected value.
-        var expected = 1;
-
         // Create the mappings.
         var mappings = CreateSteppedMappings(
             1000
@@ -210,7 +207,7 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
         )
         .Select((n, i) => SqlBulkCopyMapperColumnMapping.FromDelegate(
             new TestDbColumn($"c{n}", n)
-            , (in object _) => expected
+            , (in object _) => n
         ))
         .ToList()
         .AsReadOnly();
@@ -226,7 +223,7 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
             var actual = mapper.Map(null!, m.Column.ColumnOrdinal!.Value);
 
             // Assert.
-            Assert.Equal(expected, actual);
+            Assert.Equal(m.Column.ColumnOrdinal!.Value, actual);
         }
     }
 

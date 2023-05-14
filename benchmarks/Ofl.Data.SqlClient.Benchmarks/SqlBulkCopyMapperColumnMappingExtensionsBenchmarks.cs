@@ -61,10 +61,10 @@ public class SqlBulkCopyMapperColumnMappingExtensionsBenchmarks
     public bool FromDelegate { get; set; }
 
     [Params(
-        //1
-        //, 10
+        1
+        , 10
         //, 100
-        1_000
+        , 1_000
         //, 10_000
         //, 100_000
         //, 1_000_000
@@ -83,10 +83,10 @@ public class SqlBulkCopyMapperColumnMappingExtensionsBenchmarks
     public int Offset { get; set; }
 
     [Params(
-        //1
-        //, 10
+        1
+        , 10
         //, 100
-        1_000
+        , 1_000
         //, 10_000
     )]
     public int Step { get; set; }
