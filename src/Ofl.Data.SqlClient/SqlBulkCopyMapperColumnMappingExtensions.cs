@@ -899,6 +899,10 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
             // Push this and the field that has the mapper.
             // TODO: Explore being able to move this out
             // and pushed once in the optimal case.
+            // NOTE: This produces an invalid program.
+            // Likely it is this code (and not the CLR)
+            // that is at fault, but work to better understand
+            // and test.
             il.PushThis();
             il.Emit(OpCodes.Ldfld, mapping.MapFieldBuilder);
 
