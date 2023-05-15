@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 
 namespace Ofl.Data.SqlClient;
 
@@ -11,11 +12,13 @@ namespace Ofl.Data.SqlClient;
 public class AsyncEnumerableDataReader<T> : DbDataReader
     where T : class
 {
-    #region Instance, read-only state
+    #region Instance state
 
     private readonly IAsyncEnumerator<T> _enumerator;
 
     private readonly ISqlBulkCopyRowMapper<T> _mapper;
+
+    private T _current = default!;
 
     #endregion
 
@@ -33,18 +36,38 @@ public class AsyncEnumerableDataReader<T> : DbDataReader
 
     #endregion
 
+    #region Helpers
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool CacheCurrent(Task<bool> result)
+    {
+        // Get the value.
+        var value = result.Result;
+
+        // If there is a result, set current.
+        if (value)
+            // The task is completed.
+            _current = _enumerator.Current;
+
+        // Return the value.
+        return value;
+    }
+
+    #endregion
+
     #region DbDataReader overrides
 
     public override object GetValue(int ordinal)
     {
         // Current implementation of SqlBulkCopy indicates that this is called
         // once per value per row.  Because of that, we are *not* caching
-        // the values, and passing through.
+        // the mapped values, and passing through.
         // If that changes, and this is called multiple times, then we will cache
         // the values.
         // NOTE: GetValue should have a return type of object?, which SqlBulkWriter
         // will handle correctly.
-        return _mapper.Map(_enumerator.Current, ordinal)!;
+        // Call the mapper.
+        return _mapper.Map(in _current, ordinal)!;
     }
 
     public override int FieldCount => _mapper.FieldCount;
@@ -54,19 +77,39 @@ public class AsyncEnumerableDataReader<T> : DbDataReader
         // Move to the next item.
         var task = _enumerator.MoveNextAsync();
 
-        // If completed, return the result otherwise, complete a task and return
-        // that result.
-        return task.IsCompleted
+        // If this is completed, then set the current once, we do
+        // not need to access it multiple times.
+        if (task.IsCompleted)
+        {
+            // Get the result.
+            var taskResult = task.Result;
+
+            // Get the return value.
             // Note, caching for bool results is currently implemented
             // and not likely to change, as per:
             // https://github.com/dotnet/runtime/blob/81977309048600e67fdb44a7d4c99aaad89846d7/src/libraries/System.Private.CoreLib/src/System/Threading/Tasks/Task.cs#L5222-L5273
             // and
             // https://devblogs.microsoft.com/dotnet/how-async-await-really-works/#:~:text=And%20in%20fact%2C%20Task.FromResult%20does%20that%20today
-            ? Task.FromResult(task.Result)
-            // Convert to a task and return that with a continuation.
-            // Unfortunately, this results in an allocation but returns
-            // what we're looking for.
-            : task.AsTask();
+            var result = Task.FromResult(taskResult);
+
+            // Cache.
+            CacheCurrent(result);
+
+            // Return.
+            return result;
+        }
+
+        // Return as a task, continue when done on success to cache the current
+        // so mappings can be more efficient.
+        return task
+            .AsTask()
+            .ContinueWith(
+                // TODO: This seems to allocate, is there a way
+                // to prevent?
+                CacheCurrent
+                , TaskContinuationOptions.OnlyOnRanToCompletion
+                | TaskContinuationOptions.ExecuteSynchronously
+            );
     }
 
     #endregion
