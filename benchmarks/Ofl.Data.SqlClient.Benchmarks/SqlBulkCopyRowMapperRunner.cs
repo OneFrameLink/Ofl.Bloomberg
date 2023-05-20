@@ -1,5 +1,4 @@
-﻿using Ofl.Data.SqlClient.Tests;
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 
 namespace Ofl.Data.SqlClient.Benchmarks;
 
@@ -24,17 +23,14 @@ internal class SqlBulkCopyRowMapperRunner<T> : ISqlBulkCopyRowMapperRunner
         // We can create our mappings from that.
         var mappings = indices
             .Select(i => {
-                // Create the column.
-                var column = new BenchmarkDbColumn($"c{i}", i);
-
                 // Create the mapping and return.
                 return fromDelegate
                     ? SqlBulkCopyMapperColumnMapping.FromDelegate<T, int>(
-                        column
+                        i
                         , (in T _) => default!
                     )
                     : SqlBulkCopyMapperColumnMapping.FromDuckTypedObjectWithMapMethod(
-                        column
+                        i
                         , new SingleValueDuckTypeMapper<T, int>(default!)
                     );
             })

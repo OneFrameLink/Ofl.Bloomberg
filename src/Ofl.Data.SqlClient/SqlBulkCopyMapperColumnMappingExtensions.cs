@@ -62,7 +62,7 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
         // If not a class or not public, throw.
         if (!valueMapperType.IsClass || !valueMapperType.IsPublic)
             throw new ArgumentException(
-                $"The mapping for column {columnMapping.Column.ColumnName} must be "
+                $"The mapping for column with ordinal {columnMapping.Ordinal} must be "
                 + "a public reference type."
                 , nameof(columnMapping)
             );
@@ -126,8 +126,8 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
             if (mapMethodInfo is not null)
                 throw new InvalidOperationException(
                     $"The {nameof(SqlBulkCopyMapperColumnMapping.RowValueAccessor)} of type {valueMapperType.FullName} "
-                    + $"assigned to the column {columnMapping.Column.ColumnName} with ordinal "
-                    + $"{columnMapping.Column.ColumnOrdinal} has multiple public {mapMethodName} methods that take "
+                    + $"assigned to the column with ordinal {columnMapping.Ordinal} "
+                    + $"has multiple public {mapMethodName} methods that take "
                     + $"an input of type {inputType.FullName} as an in parameter."
                 );
 
@@ -139,8 +139,8 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
         if (mapMethodInfo is null)
             throw new InvalidOperationException(
                 $"The {nameof(SqlBulkCopyMapperColumnMapping.RowValueAccessor)} of type {valueMapperType.FullName} "
-                + $"assigned to the column {columnMapping.Column.ColumnName} with ordinal "
-                + $"{columnMapping.Column.ColumnOrdinal} must implement a public {mapMethodName} method that "
+                + $"assigned to the column with ordinal {columnMapping.Ordinal} "
+                + $"must implement a public {mapMethodName} method that "
                 + $"takes an input of type {inputType.FullName} as an in parameter and returns any type."
             );
 
@@ -151,61 +151,27 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
     private static ValidatedColumnMapping ValidateColumnMapping<T>(
         this SqlBulkCopyMapperColumnMapping columnMapping
         , IDictionary<int, SqlBulkCopyMapperColumnMapping> existingColumnOrdinals
-        , IDictionary<string, SqlBulkCopyMapperColumnMapping> existingColumnNames
     )
     {
-        // If the column name is not set, throw.
-        if (string.IsNullOrWhiteSpace(columnMapping.Column.ColumnName))
-            throw new ArgumentException(
-                $"Encountered a null or whitespace {nameof(columnMapping.Column.ColumnName)}."
-                , nameof(columnMapping)
-            );
-
-        // If the column ordinal is not set, throw.
-        if (columnMapping.Column.ColumnOrdinal is null)
-            throw new ArgumentException(
-                $"The mapping for column {columnMapping.Column.ColumnName} must contain " 
-                + $"a non-null {nameof(columnMapping.Column.ColumnOrdinal)}."
-                , nameof(columnMapping)
-            );
-
         // The ordinal must not be negative.
-        if (columnMapping.Column.ColumnOrdinal < 0)
+        if (columnMapping.Ordinal < 0)
             throw new InvalidOperationException(
-                $"The column {columnMapping.Column.ColumnName} cannot have a negative "
-                + $"{nameof(columnMapping.Column.ColumnOrdinal)} "
-                + $"({columnMapping.Column.ColumnOrdinal})"
+                $"The column with ordinal {columnMapping.Ordinal} cannot have a negative "
+                + $"{nameof(columnMapping.Ordinal)}."
             );
 
         // Check the column ordinal.  If set, throw.
         if (existingColumnOrdinals.TryGetValue(
-            columnMapping.Column.ColumnOrdinal.Value
-            , out var found
+            columnMapping.Ordinal
+            , out _
         ))
             throw new ArgumentException(
-                $"The mapping for column {columnMapping.Column.ColumnName} shares a "
-                + $"{nameof(columnMapping.Column.ColumnOrdinal)} of {columnMapping.Column.ColumnOrdinal} "
-                + $"with the mapping for {found.Column.ColumnOrdinal}."
+                $"The ordinal {columnMapping.Ordinal} is mapped multiple times."
                 , nameof(columnMapping)
             );
 
         // Add.
-        existingColumnOrdinals.Add(columnMapping.Column.ColumnOrdinal.Value, columnMapping);
-
-        // Same for name.
-        if (existingColumnNames.TryGetValue(
-            columnMapping.Column.ColumnName ?? string.Empty
-            , out found
-        ))
-            throw new ArgumentException(
-                $"The mapping for column {columnMapping.Column.ColumnName} shares a "
-                + $"{nameof(columnMapping.Column.ColumnName)} with the mapping which has " 
-                + $"{nameof(columnMapping.Column.ColumnOrdinal)} {found.Column.ColumnOrdinal}."
-                , nameof(columnMapping)
-            );
-
-        // Add.
-        existingColumnNames.Add(columnMapping.Column.ColumnName!, columnMapping);
+        existingColumnOrdinals.Add(columnMapping.Ordinal, columnMapping);
 
         // Get the map method.
         var mapMethod = columnMapping.ValidateRowValueMapper<T>();
@@ -234,12 +200,11 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
 
         // A dictionary to hold existing mappings.
         var existingOrdinals = new Dictionary<int, SqlBulkCopyMapperColumnMapping>();
-        var existingNames = new Dictionary<string, SqlBulkCopyMapperColumnMapping>();
 
         // Map and return.
         return columnMappings
-            .Select(m => m.ValidateColumnMapping<T>(existingOrdinals, existingNames))
-            .OrderBy(m => m.Mapping.Column.ColumnOrdinal)
+            .Select(m => m.ValidateColumnMapping<T>(existingOrdinals))
+            .OrderBy(m => m.Mapping.Ordinal)
             .ToList();
     }
 
@@ -258,7 +223,7 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
             mapping = mapping with {
                 MapFieldBuilder = typeBuilder
                     .DefineField(
-                        $"_mapper{mapping.Mapping.Column.ColumnOrdinal}"
+                        $"_mapper{mapping.Mapping.Ordinal}"
                         , mapping.Mapping.RowValueAccessor.GetType()
                         , FieldAttributes.Private | FieldAttributes.InitOnly
                     )
@@ -285,7 +250,7 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
 
                 // Create the field builder.
                 var fieldBuilder = typeBuilder.DefineField(
-                    $"_boxed{mapping.Mapping.Column.ColumnOrdinal}"
+                    $"_boxed{mapping.Mapping.Ordinal}"
                     , reusableBoxType
                     , FieldAttributes.Private | FieldAttributes.InitOnly
                 );
@@ -303,8 +268,8 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
                     ?? throw new InvalidOperationException(
                         $"Could not find the public method {getBoxMethodName} exposed on the type "
                         + $"{fieldBuilder.FieldType.FullName} for the column mapping with "
-                        + $"ordinal {mapping.Mapping.Column.ColumnOrdinal} and name "
-                        + $"{mapping.Mapping.Column.ColumnName}."
+                        + $"ordinal {mapping.Mapping.Ordinal} and name "
+                        + $"{mapping.Mapping.Ordinal}."
                     );
 
                 // Create the boxing information.
@@ -849,7 +814,7 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
         // Get the index buckets.
         var indexBuckets = GenerateSwitchBuckets(
             columnMappings
-                .Select(c => c.Mapping.Column.ColumnOrdinal!.Value)
+                .Select(c => c.Mapping.Ordinal)
                 .ToArray()
                 .AsReadOnly()
         );
@@ -858,7 +823,7 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
         // it into a dictionary.
         var columnMappingsByColumnOrdinal = columnMappings
             .Select(m => m with { Label = il.DefineLabel() })
-            .ToDictionary(m => m.Mapping.Column.ColumnOrdinal!.Value)
+            .ToDictionary(m => m.Mapping.Ordinal)
             .AsReadOnly();
 
         // Write the IL for switching among the buckets.

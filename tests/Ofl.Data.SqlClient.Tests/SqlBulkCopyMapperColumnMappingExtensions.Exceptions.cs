@@ -5,77 +5,16 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
     #region Tests
 
     [Fact]
-    public void Test_CreateSqlBulkCopyMapper_With_Null_ColumnName_Fails()
-    {
-        // Create the "bad" mapping.
-        var mappings = new SqlBulkCopyMapperColumnMapping[] {
-            SqlBulkCopyMapperColumnMapping.FromDelegate(
-                new TestDbColumn(null!, 0)
-                , (in ReferenceTypeInput x) => x.IntValue
-            )
-        }
-        .AsReadOnly();
-
-        // Assert
-        Assert.Throws<ArgumentException>(
-            () => SqlClient.SqlBulkCopyMapperColumnMappingExtensions
-                .CreateSqlBulkCopyMapper<ReferenceTypeInput>(mappings)
-        );
-    }
-
-    [Fact]
-    public void Test_CreateSqlBulkCopyMapper_With_Null_ColumnOrdinal_Fails()
-    {
-        // Create the "bad" mapping.
-        var mappings = new SqlBulkCopyMapperColumnMapping[] {
-            SqlBulkCopyMapperColumnMapping.FromDelegate(
-                new NullableColumnOrdinalDbColumn(nameof(ReferenceTypeInput.IntValue))
-                , (in ReferenceTypeInput x) => x.IntValue
-            )
-        }
-        .AsReadOnly();
-
-        // Assert
-        Assert.Throws<ArgumentException>(
-            () => SqlClient.SqlBulkCopyMapperColumnMappingExtensions
-                .CreateSqlBulkCopyMapper<ReferenceTypeInput>(mappings)
-        );
-    }
-
-    [Fact]
     public void Test_CreateSqlBulkCopyMapper_With_Multiple_Same_ColumnOrdinals_Fails()
     {
         // Create the "bad" mapping.
         var mappings = new SqlBulkCopyMapperColumnMapping[] {
             SqlBulkCopyMapperColumnMapping.FromDelegate(
-                new TestDbColumn(nameof(ReferenceTypeInput.IntValue), 0)
+                0
                 , (in ReferenceTypeInput x) => x.IntValue
             )
             , SqlBulkCopyMapperColumnMapping.FromDelegate(
-                new TestDbColumn(nameof(ReferenceTypeInput.NullableIntValue), 0)
-                , (in ReferenceTypeInput x) => x.NullableIntValue
-            )
-        }
-        .AsReadOnly();
-
-        // Assert.
-        Assert.Throws<ArgumentException>(
-            () => SqlClient.SqlBulkCopyMapperColumnMappingExtensions
-                .CreateSqlBulkCopyMapper<ReferenceTypeInput>(mappings)
-        );
-    }
-
-    [Fact]
-    public void Test_CreateSqlBulkCopyMapper_With_Multiple_Same_ColumnNames_Fails()
-    {
-        // Create the "bad" mapping.
-        var mappings = new SqlBulkCopyMapperColumnMapping[] {
-            SqlBulkCopyMapperColumnMapping.FromDelegate(
-                new TestDbColumn(nameof(ReferenceTypeInput.IntValue), 0)
-                , (in ReferenceTypeInput x) => x.IntValue
-            )
-            , SqlBulkCopyMapperColumnMapping.FromDelegate(
-                new TestDbColumn(nameof(ReferenceTypeInput.IntValue), 1)
+                0
                 , (in ReferenceTypeInput x) => x.NullableIntValue
             )
         }

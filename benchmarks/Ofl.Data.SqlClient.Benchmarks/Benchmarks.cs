@@ -6,7 +6,6 @@ using BenchmarkDotNet.Reports;
 using Dapper;
 using FastMember;
 using Microsoft.Data.SqlClient;
-using Ofl.Data.SqlClient.Tests;
 
 namespace Ofl.Data.SqlClient.Benchmarks;
 
@@ -55,7 +54,7 @@ public class Benchmarks<T>
 
     private readonly ISqlBulkCopyRowMapper<Input<T>> _mapper = new SqlBulkCopyMapperColumnMapping[] {
         SqlBulkCopyMapperColumnMapping.FromDuckTypedObjectWithMapMethod(
-            new BenchmarkDbColumn(nameof(Input<T>.Value), 0)
+            0
             , new InputDuckTypeMapper<T>()
         )
     }

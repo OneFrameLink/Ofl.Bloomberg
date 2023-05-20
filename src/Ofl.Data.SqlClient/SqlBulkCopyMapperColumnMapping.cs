@@ -9,24 +9,24 @@ public readonly struct SqlBulkCopyMapperColumnMapping
 
     internal readonly object RowValueAccessor;
 
-    public readonly DbColumn Column;
+    public readonly int Ordinal;
 
     #endregion
 
     #region Constructors/factories.
 
     private SqlBulkCopyMapperColumnMapping(
-        DbColumn column
+        int ordinal
         , object rowValueMapper
     )
     {
         // Assign values.
-        Column = column;
+        Ordinal = ordinal;
         RowValueAccessor = rowValueMapper;
     }
 
     public static SqlBulkCopyMapperColumnMapping FromDuckTypedObjectWithMapMethod(
-        DbColumn column
+        int column
         , object accessor
     ) =>
         // TODO: Consider lifting the check for public class and method here
@@ -38,7 +38,7 @@ public readonly struct SqlBulkCopyMapperColumnMapping
     // when the method and target is accessible by the generated
     // type (so we don't need the overhead of the delegate at all)
     public static SqlBulkCopyMapperColumnMapping FromDelegate<T, TParameter>(
-        DbColumn column
+        int column
         , SqlBulkCopyRowValueAccessor<T, TParameter> accessor
     ) => new(column, accessor);
 
@@ -47,7 +47,7 @@ public readonly struct SqlBulkCopyMapperColumnMapping
     // given that we don't need the overhead of a call to the map
     // method or a delegate.
     public static SqlBulkCopyMapperColumnMapping FromExpression<T>(
-        DbColumn column
+        int column
         , Expression<Func<T, object>> accessor
     ) => new(column, accessor);
 

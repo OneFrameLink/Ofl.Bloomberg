@@ -11,15 +11,15 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
         new SqlBulkCopyMapperColumnMapping[]
         {
             SqlBulkCopyMapperColumnMapping.FromDelegate(
-                new TestDbColumn(nameof(ReferenceTypeInput.IntValue), 0)
+                0
                 , (in ReferenceTypeInput x) => x.IntValue
             )
             , SqlBulkCopyMapperColumnMapping.FromDelegate(
-                new TestDbColumn(nameof(ReferenceTypeInput.NullableIntValue), 1)
+                1
                 , (in ReferenceTypeInput x) => x.NullableIntValue
             )
             , SqlBulkCopyMapperColumnMapping.FromDelegate(
-                new TestDbColumn(nameof(ReferenceTypeInput.StringValue), 2)
+                2
                 ,(in ReferenceTypeInput x) => x.StringValue
             )
         }
@@ -46,7 +46,7 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
             ) =>
                 (
                     SqlBulkCopyMapperColumnMapping.FromDelegate(
-                        new TestDbColumn("dummy", 0)
+                        0
                         , (in TInput _) => value
                     )
                     , 0
@@ -70,7 +70,7 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
         ) =>
             (
                 SqlBulkCopyMapperColumnMapping.FromDuckTypedObjectWithMapMethod(
-                    new TestDbColumn("dummy", 0)
+                    0
                     , new DuckTypedMapper<TInput, TProperty>(value)
                 )
                 , 0
@@ -175,7 +175,7 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
         var mappings = firstIndices
             .Concat(secondIndices)
             .Select((n, i) => SqlBulkCopyMapperColumnMapping.FromDelegate(
-                new TestDbColumn($"c{n}", n)
+                n
                 , (in object _) => n
             ))
             .ToList()
@@ -189,10 +189,10 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
         foreach (var m in mappings)
         {
             // Get the actual value.
-            var actual = mapper.Map(null!, m.Column.ColumnOrdinal!.Value);
+            var actual = mapper.Map(null!, m.Ordinal);
 
             // Assert.
-            Assert.Equal(m.Column.ColumnOrdinal!.Value, actual);
+            Assert.Equal(m.Ordinal, actual);
         }
     }
 
@@ -206,7 +206,7 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
             , 1000
         )
         .Select((n, i) => SqlBulkCopyMapperColumnMapping.FromDelegate(
-            new TestDbColumn($"c{n}", n)
+            n
             , (in object _) => n
         ))
         .ToList()
@@ -220,10 +220,10 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
         foreach (var m in mappings)
         {
             // Get the actual value.
-            var actual = mapper.Map(null!, m.Column.ColumnOrdinal!.Value);
+            var actual = mapper.Map(null!, m.Ordinal);
 
             // Assert.
-            Assert.Equal(m.Column.ColumnOrdinal!.Value, actual);
+            Assert.Equal(m.Ordinal, actual);
         }
     }
 
