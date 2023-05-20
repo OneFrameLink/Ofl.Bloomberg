@@ -1,6 +1,6 @@
 ﻿namespace Ofl.Data.SqlClient.Benchmarks;
 
-public class DuckTypeMapper<T, TProperty>
+public class SingleValueDuckTypeMapper<T, TProperty>
 {
     #region Instance, read-only state
 
@@ -10,7 +10,7 @@ public class DuckTypeMapper<T, TProperty>
 
     #region Constructor
 
-    public DuckTypeMapper(TProperty value)
+    public SingleValueDuckTypeMapper(TProperty value)
     {
         // Assign values.
         _value = value;

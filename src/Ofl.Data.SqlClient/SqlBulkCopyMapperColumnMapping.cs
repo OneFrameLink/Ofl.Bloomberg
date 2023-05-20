@@ -1,4 +1,5 @@
 ﻿using System.Data.Common;
+using System.Linq.Expressions;
 
 namespace Ofl.Data.SqlClient;
 
@@ -39,6 +40,15 @@ public readonly struct SqlBulkCopyMapperColumnMapping
     public static SqlBulkCopyMapperColumnMapping FromDelegate<T, TParameter>(
         DbColumn column
         , SqlBulkCopyRowValueAccessor<T, TParameter> accessor
+    ) => new(column, accessor);
+
+    // We can parse the expression by going to the field/property
+    // directly, this should allow us to get the best performance
+    // given that we don't need the overhead of a call to the map
+    // method or a delegate.
+    public static SqlBulkCopyMapperColumnMapping FromExpression<T>(
+        DbColumn column
+        , Expression<Func<T, object>> accessor
     ) => new(column, accessor);
 
     #endregion
