@@ -53,7 +53,7 @@ public class Benchmarks<T>
     private readonly Input<T>[] _input = new Input<T>[1_000_000];
 
     private readonly ISqlBulkCopyRowMapper<Input<T>> _mapper = new SqlBulkCopyMapperColumnMapping[] {
-        SqlBulkCopyMapperColumnMapping.FromDuckTypedObjectWithMapMethod(
+        SqlBulkCopyMapperColumnMapping.FromDuckTypedObjectWithMapMethod<T>(
             0
             , new InputDuckTypeMapper<T>()
         )

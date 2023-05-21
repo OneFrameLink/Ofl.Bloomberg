@@ -5,9 +5,7 @@ namespace Ofl.Data.SqlClient;
 
 internal record struct ValidatedColumnMapping(
     SqlBulkCopyMapperColumnMapping Mapping
-    , Type ReturnType
-    , FieldBuilder MapFieldBuilder
-    , MethodInfo MapFieldBuilderGetMethod
+    , FieldBuilder? MapFieldBuilder
     , ValidatedColumnBoxedValueMapping? Boxing
     , Label Label
 );

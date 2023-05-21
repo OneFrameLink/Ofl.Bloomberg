@@ -29,7 +29,7 @@ internal class SqlBulkCopyRowMapperRunner<T> : ISqlBulkCopyRowMapperRunner
                         i
                         , (in T _) => default!
                     )
-                    : SqlBulkCopyMapperColumnMapping.FromDuckTypedObjectWithMapMethod(
+                    : SqlBulkCopyMapperColumnMapping.FromDuckTypedObjectWithMapMethod<T>(
                         i
                         , new SingleValueDuckTypeMapper<T, int>(default!)
                     );

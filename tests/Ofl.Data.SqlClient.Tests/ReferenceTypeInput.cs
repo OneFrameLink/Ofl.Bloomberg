@@ -7,4 +7,6 @@ public class ReferenceTypeInput
     public int? NullableIntValue { get; set; }
 
     public string? StringValue { get; set; }
+
+    public DateTime? DateTimeValue { get; set; }
 }

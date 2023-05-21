@@ -1,5 +1,6 @@
 ﻿using Ofl.Core;
 using Ofl.Core.Reflection.Emit;
+using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Diagnostics;
 using System.Reflection;
@@ -47,107 +48,6 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
         return typeBuilder;
     }
 
-    private static MethodInfo ValidateRowValueMapper<T>(
-        this SqlBulkCopyMapperColumnMapping columnMapping
-    )
-    {
-        // Get the input type.
-        var inputType = typeof(T).MakeByRefType();
-
-        // Get the mapper type.
-        var valueMapperType = columnMapping
-            .RowValueAccessor
-            .GetType();
-
-        // If not a class or not public, throw.
-        if (!valueMapperType.IsClass || !valueMapperType.IsPublic)
-            throw new ArgumentException(
-                $"The mapping for column with ordinal {columnMapping.Ordinal} must be "
-                + "a public reference type."
-                , nameof(columnMapping)
-            );
-
-        // Is this a delegate? If so, then just access directly.
-        MethodInfo mapMethodInfo = columnMapping.ValidateDuckTypedMapping(            
-            inputType
-            , valueMapperType
-            , valueMapperType.IsAssignableTo(typeof(Delegate))
-        );
-
-        // Return the method info.
-        return mapMethodInfo;
-    }
-
-    private static MethodInfo ValidateDuckTypedMapping(
-        this SqlBulkCopyMapperColumnMapping columnMapping
-        , Type inputType
-        , Type valueMapperType
-        , bool isDelegate
-    )
-    {
-        // The map method name.  If it is a delegate then we
-        // want the Invoke method.
-        var mapMethodName = isDelegate
-            ? "Invoke"
-            : nameof(ISqlBulkCopyRowValueMapper<object, object>.Map);
-
-        // There must be a Map method that takes an in input of
-        // type T and return any type.
-        // Cycle through, as we want to be as open as possible.
-        var mapMethodInfos = valueMapperType
-            .GetMethods(BindingFlags.Public | BindingFlags.Instance)
-            .Where(m => m.Name == mapMethodName);
-
-        // The singular map method info.
-        MethodInfo mapMethodInfo = default!;
-
-        // Cycle.
-        foreach (var localMapMethodInfo in mapMethodInfos)
-        {
-            // Get the parameters.
-            var parameters = localMapMethodInfo.GetParameters();
-
-            // Is there one?  If not, continue.
-            if (parameters.Length != 1) continue;
-
-            // Get the parameter.
-            var parameter = parameters.Single();
-
-            // Is the first parameter assignable from the input type?
-            if (!parameter.ParameterType.IsAssignableFrom(inputType))
-                continue;
-
-            // Is it an in parameter?  If not, continue.
-            // TODO: consider if ref is ok here as well.
-            if (!parameter.IsIn) continue;
-
-            // Assign the method info.
-            // If already assigned, throw.
-            if (mapMethodInfo is not null)
-                throw new InvalidOperationException(
-                    $"The {nameof(SqlBulkCopyMapperColumnMapping.RowValueAccessor)} of type {valueMapperType.FullName} "
-                    + $"assigned to the column with ordinal {columnMapping.Ordinal} "
-                    + $"has multiple public {mapMethodName} methods that take "
-                    + $"an input of type {inputType.FullName} as an in parameter."
-                );
-
-            // Assign.
-            mapMethodInfo = localMapMethodInfo;
-        }
-
-        // If there are no methods, throw.
-        if (mapMethodInfo is null)
-            throw new InvalidOperationException(
-                $"The {nameof(SqlBulkCopyMapperColumnMapping.RowValueAccessor)} of type {valueMapperType.FullName} "
-                + $"assigned to the column with ordinal {columnMapping.Ordinal} "
-                + $"must implement a public {mapMethodName} method that "
-                + $"takes an input of type {inputType.FullName} as an in parameter and returns any type."
-            );
-
-        // Return the map method info.
-        return mapMethodInfo;
-    }
-
     private static ValidatedColumnMapping ValidateColumnMapping<T>(
         this SqlBulkCopyMapperColumnMapping columnMapping
         , IDictionary<int, SqlBulkCopyMapperColumnMapping> existingColumnOrdinals
@@ -170,19 +70,22 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
                 , nameof(columnMapping)
             );
 
+        // If the input type is not assignable to a ref of T then throw.
+        if (!columnMapping.InputType.IsAssignableTo(typeof(T).MakeByRefType()))
+            throw new InvalidOperationException(
+                $"The column with ordinal {columnMapping.Ordinal} has an input type "
+                + $"of {columnMapping.InputType.FullName} which is not assignable to "
+                + $"{typeof(T).FullName}."
+            );
+
         // Add.
         existingColumnOrdinals.Add(columnMapping.Ordinal, columnMapping);
-
-        // Get the map method.
-        var mapMethod = columnMapping.ValidateRowValueMapper<T>();
 
         // Return the validated column mapping.
         return new(
             columnMapping
-            , mapMethod.ReturnType
-            , default!
-            , mapMethod
-            , default!
+            , default
+            , default
             , default
         );
     }
@@ -219,22 +122,29 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
             // Get the mapping.
             var mapping = columnMappings[i];
 
-            // Create a field builder and set.
-            mapping = mapping with {
-                MapFieldBuilder = typeBuilder
-                    .DefineField(
-                        $"_mapper{mapping.Mapping.Ordinal}"
-                        , mapping.Mapping.RowValueAccessor.GetType()
-                        , FieldAttributes.Private | FieldAttributes.InitOnly
-                    )
-            };
+            // If there is an accessor then create a field
+            // for it.
+            if (mapping.Mapping.RowValueAccessor is not null)
+                // Create a field builder and set.
+                mapping = mapping with {
+                    MapFieldBuilder = typeBuilder
+                        .DefineField(
+                            $"_mapper{mapping.Mapping.Ordinal}"
+                            , mapping.Mapping.RowValueAccessor.GetType()
+                            , FieldAttributes.Private | FieldAttributes.InitOnly
+                        )
+                };
+
+            // The return type (we may need it for boxing
+            // even if there is no field for it).
+            var returnType = mapping.Mapping.ReturnType;
 
             // If this is not a reference type, create a reusable boxed
             // instance of the field.
-            if (mapping.ReturnType.IsValueType)
+            if (returnType.IsValueType)
             {
                 // The boxed type.
-                var boxedType = mapping.ReturnType;
+                var boxedType = returnType;
 
                 // Is this nullable?
                 var nullable = boxedType.IsGenericType
@@ -305,17 +215,18 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
             .Where(m => m.Boxing is not null)
             .Count();
 
+        // Get the constructor parameters.
+        var constructorParameters = columnMappings
+            .Select(m => m.Mapping.RowValueAccessor!)
+            .Where(a => a is not null)
+            .ToArray();
+
         // Define the constructor that takes all the delegates.
         ConstructorBuilder constructor = typeBuilder.DefineConstructor(
             MethodAttributes.Public
             , CallingConventions.Standard
-            , columnMappings.Select(m => m.Mapping.RowValueAccessor.GetType()).ToArray()
+            , constructorParameters.Select(p => p.GetType()).ToArray()
         );
-
-        // Create the parameters.
-        var parameters = columnMappings
-            .Select(m => m.Mapping.RowValueAccessor)
-            .ToArray();
 
         // Get the IL generator.
         var il = constructor.GetILGenerator();
@@ -341,7 +252,8 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
         // Call the base.
         il.PushThis();
 
-        // Push the total number of mappings.
+        // Push the total number of mappings, as this is
+        // the field count.
         il.PushInt32(columnMappings.Count);
 
         // Push the number of boxables.
@@ -350,31 +262,31 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
         // Call the base constructor.
         il.Emit(OpCodes.Call, baseConstructor);
 
-        // The index.
+        // The index for the column mappings
+        // and the index for the constructor parameters.
         var index = 0;
 
         // We need to initialize all the fields, as well as boxes.
         foreach (var mapping in columnMappings)
         {
-            // Increment the index.
-            index++;
+            // If there is a map field builder
+            //then lo
+            if (mapping.MapFieldBuilder is not null)
+            {
+                // Load "this"
+                il.PushThis();
 
-            // Index is greater than 0.
-            Debug.Assert(index > 0);
+                // Push the argument on the stack.
+                // It will be the first, (first mapping), second (second mapping)
+                // and so on.
+                il.PushArgument(++index);
 
-            // Load "this"
-            il.PushThis();
-
-            // Push the argument on the stack.
-            // It will be the first, (first mapping), second (second mapping)
-            // and so on.
-            il.PushArgument(index);
-
-            // Load the field into the appropriate field builder.
-            il.Emit(
-                OpCodes.Stfld
-                , mapping.MapFieldBuilder
-            );
+                // Load the field into the appropriate field builder.
+                il.Emit(
+                    OpCodes.Stfld
+                    , mapping.MapFieldBuilder
+                );
+            }
 
             // If boxing, then create a reusable box.
             if (mapping.Boxing is not null)
@@ -413,8 +325,7 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
                 // Load the disposables array onto the stack.
                 il.Emit(OpCodes.Ldfld, disposablesFieldInfo);
 
-                // Load the index.  In this particular case, we will decrement the boxables
-                // and this will be the index.
+                // Decrement the boxables.
                 boxables--;
 
                 // The index cannot be less than zero.
@@ -440,7 +351,7 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
         il.Emit(OpCodes.Ret);
 
         // Return the parameters.
-        return parameters;
+        return constructorParameters;
     }
 
     private static ReadOnlySpan<int[]> GenerateSwitchBuckets(IReadOnlyList<int> indices)
@@ -861,23 +772,10 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
             // Get boxing.
             var nullableBoxing = mapping.Boxing;
 
-            // Push this and the field that has the mapper.
-            // TODO: Explore being able to move this out
-            // and pushed once in the optimal case.
-            // NOTE: This produces an invalid program.
-            // Likely it is this code (and not the CLR)
-            // that is at fault, but work to better understand
-            // and test.
-            il.PushThis();
-            il.Emit(OpCodes.Ldfld, mapping.MapFieldBuilder);
-
-            // Load the first parameter, this is address
-            // of the instance of T (no need to get it's address)
-            il.PushArgument(1);
-
-            // Make the call to map.
-            // The result is on the top of the stack now.
-            il.Emit(OpCodes.Call, mapping.MapFieldBuilderGetMethod);
+            // Let the mapping write the IL.
+            mapping
+                .Mapping
+                .WriteGetValueIL(il, mapping.MapFieldBuilder);
 
             // Is there a box field builder?
             if (nullableBoxing is not null)

@@ -7,12 +7,21 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
 
     #region Helpers
 
+    #region Helpers
+
+    public static int GetReferenceTypeInputIntValue(
+        in ReferenceTypeInput x
+    ) => x.IntValue;
+
+    #endregion
+
     public static IReadOnlyCollection<SqlBulkCopyMapperColumnMapping> CreateInputMappings() =>
         new SqlBulkCopyMapperColumnMapping[]
         {
-            SqlBulkCopyMapperColumnMapping.FromDelegate(
+            // Static mapping.
+            SqlBulkCopyMapperColumnMapping.FromDelegate<ReferenceTypeInput, int>(
                 0
-                , (in ReferenceTypeInput x) => x.IntValue
+                , GetReferenceTypeInputIntValue
             )
             , SqlBulkCopyMapperColumnMapping.FromDelegate(
                 1
@@ -69,7 +78,7 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
             TProperty value
         ) =>
             (
-                SqlBulkCopyMapperColumnMapping.FromDuckTypedObjectWithMapMethod(
+                SqlBulkCopyMapperColumnMapping.FromDuckTypedObjectWithMapMethod<TInput>(
                     0
                     , new DuckTypedMapper<TInput, TProperty>(value)
                 )
@@ -143,6 +152,65 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
     #endregion
 
     #region Tests
+
+    [Fact]
+    public void Test_CreateSqlBulkCopyMapper()
+    {
+        // Create the mapper for the nullable int value.
+        var nullableIntValueMapper =
+            new InstanceValueMapper<ReferenceTypeInput, int?>(
+                (in ReferenceTypeInput input) => input.NullableIntValue
+            );
+
+        // The date time mapper.
+        var dateTimeMapper =
+            new InstanceValueMapper<ReferenceTypeInput, DateTime?>(
+                (in ReferenceTypeInput input) => input.DateTimeValue
+            );
+
+        // Create the mappings.
+        var mappings = new SqlBulkCopyMapperColumnMapping[] {
+            // Static delegate mapping.
+            SqlBulkCopyMapperColumnMapping.FromDelegate<ReferenceTypeInput, int>(
+                0
+                , GetReferenceTypeInputIntValue
+            )
+            // Delegate on public instance method on public type.
+            , SqlBulkCopyMapperColumnMapping.FromDelegate<ReferenceTypeInput, int?>(
+                1
+                , nullableIntValueMapper.Map
+            )
+            // Private delegate
+            , SqlBulkCopyMapperColumnMapping.FromDelegate(
+                2
+                , (in ReferenceTypeInput x) => x.StringValue
+            )
+            // Duck type.
+            , SqlBulkCopyMapperColumnMapping.FromDuckTypedObjectWithMapMethod<ReferenceTypeInput>(
+                3
+                , dateTimeMapper
+            )
+        }
+        .AsReadOnly();
+
+        // Call the builder to create the mapper
+        using var mapper = SqlClient.SqlBulkCopyMapperColumnMappingExtensions
+            .CreateSqlBulkCopyMapper<ReferenceTypeInput>(mappings);
+
+        // Create a value.
+        var input = new ReferenceTypeInput {
+            DateTimeValue = DateTime.Now
+            , IntValue = 1
+            , NullableIntValue = 2
+            , StringValue = "test"
+        };
+
+        // Check.
+        Assert.Equal(input.IntValue, mapper.Map(in input, 0));
+        Assert.Equal(input.NullableIntValue, mapper.Map(in input, 1));
+        Assert.Equal(input.StringValue, mapper.Map(in input, 2));
+        Assert.Equal(input.DateTimeValue, mapper.Map(in input, 3));
+    }
 
     [Fact]
     public void Test_CreateSqlBulkCopyMapper_FieldCount()
