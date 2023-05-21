@@ -11,7 +11,7 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
         var mappings = new SqlBulkCopyMapperColumnMapping[] {
             SqlBulkCopyMapperColumnMapping.FromDelegate(
                 0
-                , (in ReferenceTypeInput x) => x.IntValue
+                , (in ReferenceTypeInput x) => x.Int32Value
             )
             , SqlBulkCopyMapperColumnMapping.FromDelegate(
                 0

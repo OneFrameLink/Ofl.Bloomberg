@@ -124,13 +124,13 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
 
             // If there is an accessor then create a field
             // for it.
-            if (mapping.Mapping.RowValueAccessor is not null)
+            if (mapping.Mapping.Field is not null)
                 // Create a field builder and set.
                 mapping = mapping with {
                     MapFieldBuilder = typeBuilder
                         .DefineField(
                             $"_mapper{mapping.Mapping.Ordinal}"
-                            , mapping.Mapping.RowValueAccessor.GetType()
+                            , mapping.Mapping.Field.Value.FieldType
                             , FieldAttributes.Private | FieldAttributes.InitOnly
                         )
                 };
@@ -217,15 +217,24 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
 
         // Get the constructor parameters.
         var constructorParameters = columnMappings
-            .Select(m => m.Mapping.RowValueAccessor!)
-            .Where(a => a is not null)
+            .Where(m => m.Mapping.Field is not null)
+            .Select(m => m.Mapping.Field!.Value.Field)
+            .ToArray();
+
+        // Get the constructor parameter types, this is
+        // different from the actual types as the constant
+        // mapper will take advantage of boxing for constant
+        // values.
+        var constructorParameterTypes = columnMappings
+            .Where(m => m.Mapping.Field is not null)
+            .Select(m => m.Mapping.Field!.Value.FieldType)
             .ToArray();
 
         // Define the constructor that takes all the delegates.
         ConstructorBuilder constructor = typeBuilder.DefineConstructor(
             MethodAttributes.Public
             , CallingConventions.Standard
-            , constructorParameters.Select(p => p.GetType()).ToArray()
+            , constructorParameterTypes
         );
 
         // Get the IL generator.

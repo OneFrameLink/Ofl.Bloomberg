@@ -10,7 +10,7 @@ public abstract class SqlBulkCopyMapperColumnMapping
 {
     #region Instance, read-only state
 
-    internal readonly object? RowValueAccessor;
+    internal readonly MapperField? Field;
 
     public readonly int Ordinal;
 
@@ -24,14 +24,20 @@ public abstract class SqlBulkCopyMapperColumnMapping
 
     protected SqlBulkCopyMapperColumnMapping(
         int ordinal
-        , object? rowValueMapper
+        , object? mapperFieldValue
+        , Type? mapperFieldType
         , Type inputType
         , Type returnType
     )
     {
         // Assign values.
         Ordinal = ordinal;
-        RowValueAccessor = rowValueMapper;
+        Field = mapperFieldValue is null
+            ? null
+            : new(
+                mapperFieldValue
+                , mapperFieldType ?? mapperFieldValue.GetType()
+            );
         InputType = inputType;
         ReturnType = returnType;
     }
@@ -150,23 +156,30 @@ public abstract class SqlBulkCopyMapperColumnMapping
         {
             // Is this static?  If so, call specifically.
             if (accessor.Target is null)
-                // Call the method.
-                return new StaticMethodSqlBulkCopyMapperColumnMapping(
-                    ordinal
-                    , inputType
-                    , accessor.Method
-                );
-
-            // There's an instance.
-            // If the type is fully accessible (check nested all the way up)
-            // then we can just pass *that* and call the method directly.
-            if (accessor.Target.GetType().IsFullyPublic())
-                return new InstanceMethodSqlBulkCopyMapperColumnMapping(
-                    ordinal
-                    , accessor.Target
-                    , inputType
-                    , accessor.Method
-                );
+            {
+                // If the declaring type of the method is fully public
+                // then return a static method call.
+                if (accessor.Method.DeclaringType?.IsFullyPublic() ?? false)
+                    // Call the method.
+                    return new StaticMethodSqlBulkCopyMapperColumnMapping(
+                        ordinal
+                        , inputType
+                        , accessor.Method
+                    );
+            }
+            else
+            {
+                // There's an instance.
+                // If the type is fully accessible (check nested all the way up)
+                // then we can just pass *that* and call the method directly.
+                if (accessor.Target.GetType().IsFullyPublic())
+                    return new InstanceMethodSqlBulkCopyMapperColumnMapping(
+                        ordinal
+                        , accessor.Target
+                        , inputType
+                        , accessor.Method
+                    );
+            }
         }
 
         // Nothing to work with, so just call the instance method accessor
@@ -191,6 +204,83 @@ public abstract class SqlBulkCopyMapperColumnMapping
             , accessor
             , inputType
             , invokeMethodInfo
+        );
+    }
+
+    public static SqlBulkCopyMapperColumnMapping FromExpression<T>(
+        int ordinal
+        , Expression<Func<T, object?>> expression
+    )
+    {
+        // If T is not fully public, then throw, since
+        // there's nothing we can do.
+        if (!typeof(T).IsFullyPublic())
+            throw new InvalidOperationException(
+                $"The type parameter passed to {nameof(FromExpression)} " 
+                + $"({typeof(T).FullName}) must be public."
+            );
+
+        // Get the input type.
+        var inputType = typeof(T);
+        inputType = inputType.IsByRef
+            ? inputType
+            : inputType.MakeByRefType();
+
+        // This is a lambda, obviously, get the body.
+        var body = expression.Body;
+
+        // Look at the type of the body, if it is converting to object
+        // then strip that.
+        if (
+            expression.Body.NodeType == ExpressionType.Convert
+            && expression.ReturnType == typeof(object)
+            && expression.Body is UnaryExpression u
+        )
+            // Set the body to the operand.
+            body = u.Operand;
+
+        // If this is a constant, then just use that.
+        if (body is ConstantExpression ce)
+            // Is the value null?  Return null mapping
+            // otherwise return constant mapping.
+            return ce.Value is null
+                ? new NullSqlBulkCopyMapperColumnMapping(ordinal, inputType)
+                : new ConstantSqlBulkCopyMapperColumnMapping(ordinal, inputType, ce.Value);
+
+        // If this is a member access, then sniff the member.
+        if (body is MemberExpression m)
+        {
+            // If it's a field, we can load the field, use that.
+            if (
+                m.Member is FieldInfo fi
+                && fi.IsPublic
+            )
+                return new FieldAccessorSqlBulkCopyMapperColumnMapping(
+                    ordinal
+                    , inputType
+                    , fi
+                );
+
+            // If this is a property and the getter is public
+            // then use that.
+            if (
+                m.Member is PropertyInfo pi
+                && pi.GetGetMethod() is MethodInfo mi
+                && mi.IsPublic
+            )
+                // Return a property accessor.
+                return new PropertyAccessorSqlBulkCopyMapperColumnMapping(
+                    ordinal
+                    , inputType
+                    , mi
+                );
+        }
+
+        // Throw.
+        throw new ArgumentException(
+            $"Could not construct an accessor from the {nameof(expression)} " 
+            + "parameter."
+            , nameof(expression)
         );
     }
 

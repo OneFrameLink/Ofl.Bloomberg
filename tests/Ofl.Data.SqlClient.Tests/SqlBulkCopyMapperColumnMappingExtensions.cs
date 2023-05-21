@@ -11,7 +11,7 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
 
     public static int GetReferenceTypeInputIntValue(
         in ReferenceTypeInput x
-    ) => x.IntValue;
+    ) => x.Int32Value;
 
     #endregion
 
@@ -154,7 +154,7 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
     #region Tests
 
     [Fact]
-    public void Test_CreateSqlBulkCopyMapper()
+    public void Test_CreateSqlBulkCopyMapper_ReferenceType()
     {
         // Create the mapper for the nullable int value.
         var nullableIntValueMapper =
@@ -190,6 +190,26 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
                 3
                 , dateTimeMapper
             )
+            // Expression on publicly available item
+            , SqlBulkCopyMapperColumnMapping.FromExpression(
+                4
+                , (ReferenceTypeInput x) => x.Int64Value
+            )
+            // Expression on constant.
+            , SqlBulkCopyMapperColumnMapping.FromExpression(
+                5
+                , (ReferenceTypeInput x) => 42
+            )
+            // Null.
+            , SqlBulkCopyMapperColumnMapping.FromExpression(
+                6
+                , (ReferenceTypeInput x) => null
+            )
+            // Field
+            , SqlBulkCopyMapperColumnMapping.FromExpression(
+                7
+                , (ReferenceTypeInput x) => x.FieldInt32Value
+            )
         }
         .AsReadOnly();
 
@@ -200,16 +220,22 @@ public partial class SqlBulkCopyMapperColumnMappingExtensions
         // Create a value.
         var input = new ReferenceTypeInput {
             DateTimeValue = DateTime.Now
-            , IntValue = 1
+            , Int32Value = 1
             , NullableIntValue = 2
             , StringValue = "test"
+            , Int64Value = long.MaxValue
+            , FieldInt32Value = int.MaxValue
         };
 
         // Check.
-        Assert.Equal(input.IntValue, mapper.Map(in input, 0));
+        Assert.Equal(input.Int32Value, mapper.Map(in input, 0));
         Assert.Equal(input.NullableIntValue, mapper.Map(in input, 1));
         Assert.Equal(input.StringValue, mapper.Map(in input, 2));
         Assert.Equal(input.DateTimeValue, mapper.Map(in input, 3));
+        Assert.Equal(input.Int64Value, mapper.Map(in input, 4));
+        Assert.Equal(42, mapper.Map(in input, 5));
+        Assert.Null(mapper.Map(in input, 6));
+        Assert.Equal(input.FieldInt32Value, mapper.Map(in input, 7));
     }
 
     [Fact]

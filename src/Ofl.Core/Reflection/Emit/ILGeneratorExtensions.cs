@@ -4,11 +4,11 @@ namespace Ofl.Core.Reflection.Emit;
 
 public static class ILGeneratorExtensions
 {
-    public static void PushThis(
+    public static ILGenerator PushThis(
         this ILGenerator generator
     ) => generator.PushArgument(0);
 
-    public static void PushLoadLocal(
+    public static ILGenerator PushLoadLocal(
         this ILGenerator generator
         , int index
     )
@@ -41,9 +41,12 @@ public static class ILGeneratorExtensions
                     , $"The {nameof(index)} parameter must be a non-negative value (actual: {index})."
                 );
         }
+
+        // Return the generator.
+        return generator;
     }
 
-    public static void PushLoadLocalAddress(
+    public static ILGenerator PushLoadLocalAddress(
         this ILGenerator generator
         , int index
     )
@@ -64,9 +67,12 @@ public static class ILGeneratorExtensions
                     , $"The {nameof(index)} parameter must be a non-negative value (actual: {index})."
                 );
         }
+
+        // Return the generator.
+        return generator;
     }
 
-    public static void PushStoreLocal(
+    public static ILGenerator PushStoreLocal(
         this ILGenerator generator
         , int index
     )
@@ -99,9 +105,12 @@ public static class ILGeneratorExtensions
                     , $"The {nameof(index)} parameter must be a non-negative value (actual: {index})."
                 );
         }
+
+        // Return the generator.
+        return generator;
     }
 
-    public static void PushArgument(
+    public static ILGenerator PushArgument(
         this ILGenerator generator
         , int index
     )
@@ -137,9 +146,12 @@ public static class ILGeneratorExtensions
                 generator.Emit(OpCodes.Ldarg, index);
                 break;
         }
+
+        // Return the generator.
+        return generator;
     }
 
-    public static void PushArgumentAddress(
+    public static ILGenerator PushArgumentAddress(
         this ILGenerator generator
         , int index
     )
@@ -160,9 +172,71 @@ public static class ILGeneratorExtensions
                 generator.Emit(OpCodes.Ldarga, index);
                 break;
         }
+
+        // Return the generator.
+        return generator;
     }
 
-    public static void PushInt32(
+    public static ILGenerator PushString(
+        this ILGenerator generator
+        , string value
+    )
+    {
+        // Push the instruction.
+        generator.Emit(OpCodes.Ldstr, value);
+
+        // Return the generator.
+        return generator;
+    }
+
+    public static ILGenerator PushNull(
+        this ILGenerator generator
+    )
+    {
+        // Push the instruction.
+        generator.Emit(OpCodes.Ldnull);
+
+        // Return the generator.
+        return generator;
+    }
+
+    public static ILGenerator PushDouble(
+        this ILGenerator generator
+        , double value
+    )
+    {
+        // Push the instruction.
+        generator.Emit(OpCodes.Ldc_R8, value);
+
+        // Return the generator.
+        return generator;
+    }
+
+    public static ILGenerator PushSingle(
+        this ILGenerator generator
+        , float value
+    )
+    {
+        // Push the instruction.
+        generator.Emit(OpCodes.Ldc_R4, value);
+
+        // Return the generator.
+        return generator;
+    }
+
+    public static ILGenerator PushInt64(
+        this ILGenerator generator
+        , long value
+    )
+    {
+        // Push the instruction.
+        generator.Emit(OpCodes.Ldc_I8, value);
+
+        // Return the generator.
+        return generator;
+    }
+
+    public static ILGenerator PushInt32(
         this ILGenerator generator
         , int value
     )
@@ -210,5 +284,8 @@ public static class ILGeneratorExtensions
                 generator.Emit(OpCodes.Ldc_I4, value);
                 break;
         }
+
+        // Return the generator.
+        return generator;
     }
 }

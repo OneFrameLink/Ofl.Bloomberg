@@ -4,30 +4,30 @@ using System.Reflection.Emit;
 
 namespace Ofl.Data.SqlClient.Mappings;
 
-internal sealed class StaticMethodSqlBulkCopyMapperColumnMapping : SqlBulkCopyMapperColumnMapping
+internal sealed class FieldAccessorSqlBulkCopyMapperColumnMapping : SqlBulkCopyMapperColumnMapping
 {
     #region Instance, read-only state
 
-    private readonly MethodInfo _methodInfo;
+    private readonly FieldInfo _fieldInfo;
 
     #endregion
 
-    #region Constructors/factories.
+    #region Constructor.
 
-    public StaticMethodSqlBulkCopyMapperColumnMapping(
+    public FieldAccessorSqlBulkCopyMapperColumnMapping(
         int ordinal
         , Type inputType
-        , MethodInfo methodInfo
+        , FieldInfo fieldInfo
     ) : base(
         ordinal
         , default
         , default
         , inputType
-        , methodInfo.ReturnType
+        , fieldInfo.FieldType
     )
     {
         // Assign values.
-        _methodInfo = methodInfo;
+        _fieldInfo = fieldInfo;
     }
 
     #endregion
@@ -39,12 +39,16 @@ internal sealed class StaticMethodSqlBulkCopyMapperColumnMapping : SqlBulkCopyMa
         , FieldBuilder? rowValueAccessorFieldBuilder
     )
     {
-        // Load the first parameter, this is address
-        // of the instance of T (no need to get it's address)
+        // Load the first parameter, it's an address already.
         il.PushArgument(1);
 
-        // Call the method, that's it.
-        il.Emit(OpCodes.Call, _methodInfo);
+        // If this is a reference type, then
+        // dereference.
+        if (!InputType.IsValueType)
+            il.Emit(OpCodes.Ldind_Ref);
+
+        // Load the field.
+        il.Emit(OpCodes.Ldfld, _fieldInfo);
     }
 
     #endregion

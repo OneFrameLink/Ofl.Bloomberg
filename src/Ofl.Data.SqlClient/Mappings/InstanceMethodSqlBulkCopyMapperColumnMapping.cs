@@ -16,10 +16,16 @@ internal sealed class InstanceMethodSqlBulkCopyMapperColumnMapping : SqlBulkCopy
 
     public InstanceMethodSqlBulkCopyMapperColumnMapping(
         int ordinal
-        , object rowValueMapper
+        , object mapperFieldValue
         , Type inputType
         , MethodInfo methodInfo
-    ) : base(ordinal, rowValueMapper, inputType, methodInfo.ReturnType)
+    ) : base(
+        ordinal
+        , mapperFieldValue
+        , default
+        , inputType
+        , methodInfo.ReturnType
+    )
     {
         // Assign values.
         _methodInfo = methodInfo;
@@ -45,7 +51,7 @@ internal sealed class InstanceMethodSqlBulkCopyMapperColumnMapping : SqlBulkCopy
 
         // Is this a value type?  If so, push the address of the
         // value type onto the stack.
-        var opCode = RowValueAccessor!.GetType().IsValueType
+        var opCode = Field!.Value.FieldType.IsValueType
             ? OpCodes.Ldflda
             : OpCodes.Ldfld;
 
