@@ -13,7 +13,9 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
 {
     #region Helpers
 
-    private static TypeBuilder CreateTypeBuilder<T>()
+    private static TypeBuilder CreateTypeBuilder(
+        Type type
+    )
     {
         // Get the current guid discriminator.
         var discriminator = Guid.NewGuid().ToString("N");
@@ -41,16 +43,17 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
             // No need to allow it to be extended.
             , TypeAttributes.Public 
             | TypeAttributes.Sealed
-            , typeof(SqlBulkCopyRowMapperBase<T>)
+            , typeof(SqlBulkCopyRowMapperBase<>).MakeGenericType(type)
          );
 
         // Return the type builder.
         return typeBuilder;
     }
 
-    private static ValidatedColumnMapping ValidateColumnMapping<T>(
+    private static ValidatedColumnMapping ValidateColumnMapping(
         this SqlBulkCopyMapperColumnMapping columnMapping
         , IDictionary<int, SqlBulkCopyMapperColumnMapping> existingColumnOrdinals
+        , Type type
     )
     {
         // The ordinal must not be negative.
@@ -70,12 +73,17 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
                 , nameof(columnMapping)
             );
 
+        // Get the reference type and the reference
+        // input type.
+        var referenceType = type.MakeByRefType();
+        var inputReferenceType = columnMapping.InputType.MakeByRefType();
+
         // If the input type is not assignable to a ref of T then throw.
-        if (!columnMapping.InputType.IsAssignableTo(typeof(T).MakeByRefType()))
+        if (!inputReferenceType.IsAssignableTo(referenceType))
             throw new InvalidOperationException(
                 $"The column with ordinal {columnMapping.Ordinal} has an input type "
                 + $"of {columnMapping.InputType.FullName} which is not assignable to "
-                + $"{typeof(T).FullName}."
+                + $"{type.FullName}."
             );
 
         // Add.
@@ -90,8 +98,9 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
         );
     }
 
-    private static List<ValidatedColumnMapping> ValidateColumnMappings<T>(
+    private static List<ValidatedColumnMapping> ValidateColumnMappings(
         this IReadOnlyCollection<SqlBulkCopyMapperColumnMapping> columnMappings
+        , Type type
     )
     {
         // There must be at least one element.
@@ -106,7 +115,7 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
 
         // Map and return.
         return columnMappings
-            .Select(m => m.ValidateColumnMapping<T>(existingOrdinals))
+            .Select(m => m.ValidateColumnMapping(existingOrdinals, type))
             .OrderBy(m => m.Mapping.Ordinal)
             .ToList();
     }
@@ -201,14 +210,15 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
         }
     }
 
-    private static object[] CreateConstructor<T>(
+    private static object[] CreateConstructor(
         this TypeBuilder typeBuilder
         , IReadOnlyCollection<ValidatedColumnMapping> columnMappings
+        , Type type
     )
     {
         // The base type.
         var baseType = typeof(SqlBulkCopyRowMapperBase<>)
-            .MakeGenericType(typeof(T));
+            .MakeGenericType(type);
 
         // Get the boxable count.
         var boxables = columnMappings
@@ -245,11 +255,11 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
         // as well as populate them.
         var disposablesFieldInfo = baseType
             .GetField(
-                nameof(SqlBulkCopyRowMapperBase<T>._disposables)
+                nameof(SqlBulkCopyRowMapperBase<int>._disposables)
                 , BindingFlags.Instance | BindingFlags.NonPublic
             )
             ?? throw new InvalidOperationException(
-                $"Could not find the {nameof(SqlBulkCopyRowMapperBase<T>._disposables)} field " +
+                $"Could not find the {nameof(SqlBulkCopyRowMapperBase<int>._disposables)} field " +
                 $"on the {baseType.FullName} type."
             );
 
@@ -637,20 +647,25 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
 
     // Implements:
     // public abstract object? Map(T instance, int ordinal);
-    private static void ImplementMapMethod<T>(
+    private static void ImplementMapMethod(
         this TypeBuilder typeBuilder
         , IReadOnlyList<ValidatedColumnMapping> columnMappings
+        , Type type
     )
     {
+        // The constructed type.
+        Type constructedType = typeof(SqlBulkCopyRowMapperBase<>)
+            .MakeGenericType(type);
+
         // The map method name.
-        const string mapMethodName = nameof(SqlBulkCopyRowMapperBase<T>.Map);
+        const string mapMethodName = nameof(SqlBulkCopyRowMapperBase<int>.Map);
 
         // Get the base method.
-        var baseMethodInfo = typeof(SqlBulkCopyRowMapperBase<T>)
+        var baseMethodInfo = constructedType
             .GetMethod(mapMethodName)
             ?? throw new InvalidOperationException(
                 $"Could not find the {mapMethodName} method on the "
-                + $"{typeof(SqlBulkCopyRowMapperBase<T>).FullName} type."
+                + $"{typeof(SqlBulkCopyRowMapperBase<>).FullName} type."
             );
 
         // Get the base method parameter infos.
@@ -881,16 +896,16 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
 
         // The throw method name.
         const string createExceptionMethodName = 
-            nameof(SqlBulkCopyRowMapperBase<T>.CreateInvalidOrdinalArgumentOutOfRangeException);
+            nameof(SqlBulkCopyRowMapperBase<int>.CreateInvalidOrdinalArgumentOutOfRangeException);
 
         // We want to throw here.
-        var throwMethod = typeof(SqlBulkCopyRowMapperBase<T>)
+        var throwMethod = constructedType
             .GetMethod(
                 createExceptionMethodName
                 , BindingFlags.Static | BindingFlags.NonPublic
             )
             ?? throw new InvalidOperationException(
-                $"Could not find the {createExceptionMethodName} method on the {typeof(SqlBulkCopyRowMapperBase<T>).FullName} type."
+                $"Could not find the {createExceptionMethodName} method on the {constructedType.FullName} type."
             );
 
         // Load the index.  Second parameter.
@@ -917,34 +932,48 @@ public static class SqlBulkCopyMapperColumnMappingExtensions
 
     public static ISqlBulkCopyRowMapper<T> CreateSqlBulkCopyMapper<T>(
         this IReadOnlyCollection<SqlBulkCopyMapperColumnMapping> columnMappings
+    ) => (ISqlBulkCopyRowMapper<T>) columnMappings.CreateSqlBulkCopyMapper(typeof(T));
+        
+    public static object CreateSqlBulkCopyMapper(
+        this IReadOnlyCollection<SqlBulkCopyMapperColumnMapping> columnMappings
+        , Type inputType
     )
     {
+        // If the input type is by ref, then throw.
+        if (inputType.IsPointer || inputType.IsByRef)
+            throw new ArgumentException(
+                $"The type {nameof(inputType)} parameter cannot be a type that is "
+                + $"a pointer or passed by ref."
+                , nameof(inputType)
+            );
+
         // Validate the column mappings.
-        var validated = columnMappings.ValidateColumnMappings<T>();
+        var validated = columnMappings.ValidateColumnMappings(inputType);
 
         // Create the type builder.
-        var typeBuilder = CreateTypeBuilder<T>();
+        var typeBuilder = CreateTypeBuilder(inputType);
 
         // Create the fields to store everything.
         typeBuilder.CreateFields(validated);
 
         // Create the constructor.
-        var parameters = typeBuilder.CreateConstructor<T>(validated);
+        var parameters = typeBuilder.CreateConstructor(validated, inputType);
 
         // Implement the map method.
-        typeBuilder.ImplementMapMethod<T>(validated);
+        typeBuilder.ImplementMapMethod(validated, inputType);
 
         // Create the type.
         var type = typeBuilder.CreateType();
 
         // The instance.
-        return (ISqlBulkCopyRowMapper<T>?) Activator.CreateInstance(
+        return Activator.CreateInstance(
             type
             , parameters
         )
             ?? throw new InvalidOperationException(
-                $"The call to create an implementation of {typeof(ISqlBulkCopyRowMapper<T>).FullName} "
-                + "returned null."
+                "The call to create an implementation of "
+                + typeof(ISqlBulkCopyRowMapper<>).MakeGenericType(inputType).FullName
+                + " returned null."
             );
     }
 

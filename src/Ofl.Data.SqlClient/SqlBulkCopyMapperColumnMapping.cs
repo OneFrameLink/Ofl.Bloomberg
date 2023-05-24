@@ -30,6 +30,9 @@ public abstract class SqlBulkCopyMapperColumnMapping
         , Type returnType
     )
     {
+        // Check the input type.
+        CheckInputType(inputType);
+
         // Assign values.
         Ordinal = ordinal;
         Field = mapperFieldValue is null
@@ -53,6 +56,21 @@ public abstract class SqlBulkCopyMapperColumnMapping
 
     #endregion
 
+    #region Helpers
+
+    private static void CheckInputType(Type inputType)
+    {
+        // If this is a by ref type, then throw.
+        if (inputType.IsByRef)
+            throw new ArgumentException(
+                $"The {nameof(inputType)} parameter must not be a reference to a type "
+                + $"(i.e. {nameof(inputType.IsByRef)} must be false)."
+                , nameof(inputType)
+            );
+    }
+
+    #endregion
+
     #region Factories
 
     public static SqlBulkCopyMapperColumnMapping FromDuckTypedObjectWithMapMethod<T>(
@@ -70,11 +88,6 @@ public abstract class SqlBulkCopyMapperColumnMapping
         , Type inputType
     )
     {
-        // Format the input type.
-        inputType = inputType.IsByRef
-            ? inputType
-            : inputType.MakeByRefType();
-
         // The map method name.  If it is a delegate then we
         // want the Invoke method.
         const string mapMethodName = 
@@ -91,6 +104,9 @@ public abstract class SqlBulkCopyMapperColumnMapping
         // The singular map method info.
         MethodInfo mapMethodInfo = default!;
 
+        // Get the parameter input type.
+        var parameterInputType = inputType.MakeByRefType();
+
         // Cycle.
         foreach (var localMapMethodInfo in mapMethodInfos)
         {
@@ -104,7 +120,7 @@ public abstract class SqlBulkCopyMapperColumnMapping
             var parameter = parameters.Single();
 
             // Is the first parameter assignable from the input type?
-            if (!parameter.ParameterType.IsAssignableFrom(inputType))
+            if (!parameter.ParameterType.IsAssignableFrom(parameterInputType))
                 continue;
 
             // Is it an in parameter?  If not, continue.
@@ -149,7 +165,7 @@ public abstract class SqlBulkCopyMapperColumnMapping
     )
     {
         // The input type.
-        var inputType = typeof(T).MakeByRefType();
+        var inputType = typeof(T);
 
         // If the accessor method is public, we can work with that.
         if (accessor.Method.IsPublic)
@@ -207,6 +223,52 @@ public abstract class SqlBulkCopyMapperColumnMapping
         );
     }
 
+    public static SqlBulkCopyMapperColumnMapping FromInstanceProperty(
+        int ordinal
+        , Type inputType
+        , string property
+    )
+    {
+        // If input type is not fully public, then throw, since
+        // there's nothing we can do.
+        if (!inputType.IsFullyPublic())
+            throw new ArgumentException(
+                $"The {nameof(inputType)} parameter "
+                + $"({inputType.FullName}) must be public."
+                , nameof(inputType)
+            );
+
+        // Get the property.
+        var propertyInfo = inputType
+            .GetProperty(property, BindingFlags.Instance | BindingFlags.Public) 
+            ?? throw new ArgumentException(
+                $"{property} does not exist as a public instance property on the type "
+                + $"{inputType.FullName}."
+                , nameof(property)
+            );
+
+        // Get the get method.
+        var getMethod = propertyInfo.GetGetMethod() 
+            ?? throw new ArgumentException(
+                $"{property} on the type {inputType.FullName} does not have a getter."
+                , nameof(property)
+            );
+
+        // If not public, throw.
+        if (!getMethod.IsPublic)
+            throw new ArgumentException(
+                $"{property} on the type {inputType.FullName} does not have a public getter."
+                , nameof(property)
+        );
+
+        // Return the property map.
+        return new PropertyAccessorSqlBulkCopyMapperColumnMapping(
+            ordinal
+            , inputType
+            , getMethod
+        );
+    }
+
     public static SqlBulkCopyMapperColumnMapping FromExpression<T>(
         int ordinal
         , Expression<Func<T, object?>> expression
@@ -222,9 +284,6 @@ public abstract class SqlBulkCopyMapperColumnMapping
 
         // Get the input type.
         var inputType = typeof(T);
-        inputType = inputType.IsByRef
-            ? inputType
-            : inputType.MakeByRefType();
 
         // This is a lambda, obviously, get the body.
         var body = expression.Body;
@@ -263,17 +322,9 @@ public abstract class SqlBulkCopyMapperColumnMapping
 
             // If this is a property and the getter is public
             // then use that.
-            if (
-                m.Member is PropertyInfo pi
-                && pi.GetGetMethod() is MethodInfo mi
-                && mi.IsPublic
-            )
+            if (m.Member is PropertyInfo pi)
                 // Return a property accessor.
-                return new PropertyAccessorSqlBulkCopyMapperColumnMapping(
-                    ordinal
-                    , inputType
-                    , mi
-                );
+                return FromInstanceProperty(ordinal, inputType, pi.Name);
         }
 
         // Throw.
