@@ -121,7 +121,7 @@ public class MapperBenchmarks<TInput, T>
             property.Invoke(input, values);
         }
 
-        // Use reflection to set the values.
+        // Set the row values.
         for (int i = 0; i < _rows.Length; i++)
             _rows[i] = input;
     }

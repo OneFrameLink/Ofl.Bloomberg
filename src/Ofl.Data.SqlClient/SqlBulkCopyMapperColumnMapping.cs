@@ -269,6 +269,45 @@ public abstract class SqlBulkCopyMapperColumnMapping
         );
     }
 
+    public static SqlBulkCopyMapperColumnMapping FromInstanceField(
+        int ordinal
+        , Type inputType
+        , string field
+    )
+    {
+        // If input type is not fully public, then throw, since
+        // there's nothing we can do.
+        if (!inputType.IsFullyPublic())
+            throw new ArgumentException(
+                $"The {nameof(inputType)} parameter "
+                + $"({inputType.FullName}) must be public."
+                , nameof(inputType)
+            );
+
+        // Get the property.
+        var fieldInfo = inputType
+            .GetField(field, BindingFlags.Instance | BindingFlags.Public)
+            ?? throw new ArgumentException(
+                $"{field} does not exist as a public instance field on the type "
+                + $"{inputType.FullName}."
+                , nameof(field)
+            );
+
+        // If not public, throw.
+        if (!fieldInfo.IsPublic)
+            throw new ArgumentException(
+                $"{field} on the type {inputType.FullName} is not public."
+                , nameof(field)
+        );
+
+        // Return the field accessor.
+        return new FieldAccessorSqlBulkCopyMapperColumnMapping(
+            ordinal
+            , inputType
+            , fieldInfo
+        );
+    }
+
     public static SqlBulkCopyMapperColumnMapping FromExpression<T>(
         int ordinal
         , Expression<Func<T, object?>> expression
@@ -309,16 +348,12 @@ public abstract class SqlBulkCopyMapperColumnMapping
         // If this is a member access, then sniff the member.
         if (body is MemberExpression m)
         {
+            // TODO: Handle static properties/fields/methods that have no parameters.
+            // TODO: Handle instance methods on the input that have no parameters.
+
             // If it's a field, we can load the field, use that.
-            if (
-                m.Member is FieldInfo fi
-                && fi.IsPublic
-            )
-                return new FieldAccessorSqlBulkCopyMapperColumnMapping(
-                    ordinal
-                    , inputType
-                    , fi
-                );
+            if (m.Member is FieldInfo fi)
+                return FromInstanceField(ordinal, inputType, fi.Name);
 
             // If this is a property and the getter is public
             // then use that.
