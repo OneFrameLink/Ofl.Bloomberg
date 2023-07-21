@@ -101,7 +101,7 @@
 //    {
 //        // Open the connection and open.
 //        _connection = new SqlConnection(
-//            ***REMOVED***
+//            "<NOPE>"
 //        );
 //        await _connection
 //            .OpenAsync()
